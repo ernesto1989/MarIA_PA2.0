@@ -1,0 +1,193 @@
+from database.connection import get_connection
+
+
+class ActivityService:
+
+    @staticmethod
+    def find_task(task_id):
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT *
+            FROM activities
+            WHERE id=%s
+        """, (task_id,))
+
+        task = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        return task
+
+
+    @staticmethod
+    def find_tasks(
+        user_id,
+        status=None,
+        priority=None,
+        due_date=None,
+        due_before=None,
+        due_after=None,
+        limit=None
+    ):
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        sql = """
+            SELECT *
+            FROM activities
+            WHERE user_id=%s
+        """
+
+        values = [user_id]
+
+        if status is not None:
+            sql += " AND status=%s"
+            values.append(status)
+
+        if priority is not None:
+            sql += " AND priority=%s"
+            values.append(priority)
+
+        if due_date is not None:
+            sql += " AND due_date=%s"
+            values.append(due_date)
+
+        if due_before is not None:
+            sql += " AND due_date<=%s"
+            values.append(due_before)
+
+        if due_after is not None:
+            sql += " AND due_date>=%s"
+            values.append(due_after)
+
+        sql += " ORDER BY due_date ASC"
+
+        if limit is not None:
+            sql += " LIMIT %s"
+            values.append(limit)
+
+        cursor.execute(sql, tuple(values))
+
+        tasks = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return tasks
+
+
+    @staticmethod
+    def add_task(user_id,
+                 title,
+                 due_date,
+                 priority):
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO activities
+            (
+                user_id,
+                title,
+                due_date,
+                priority
+            )
+            VALUES
+            (
+                %s,
+                %s,
+                %s,
+                %s
+            )
+        """, (
+            user_id,
+            title,
+            due_date,
+            priority
+        ))
+
+        conn.commit()
+
+        task_id = cursor.lastrowid
+
+        cursor.close()
+        conn.close()
+
+        return task_id
+
+
+    @staticmethod
+    def update_task(task_id,
+                    title=None,
+                    due_date=None,
+                    priority=None,
+                    status=None):
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        updates = []
+        values = []
+
+        if title is not None:
+            updates.append("title=%s")
+            values.append(title)
+
+        if due_date is not None:
+            updates.append("due_date=%s")
+            values.append(due_date)
+
+        if priority is not None:
+            updates.append("priority=%s")
+            values.append(priority)
+
+        if status is not None:
+            updates.append("status=%s")
+            values.append(status)
+
+        if len(updates) == 0:
+            return False
+
+        values.append(task_id)
+
+        sql = f"""
+            UPDATE activities
+            SET {', '.join(updates)}
+            WHERE id=%s
+        """
+
+        cursor.execute(sql, tuple(values))
+
+        conn.commit()
+
+        updated = cursor.rowcount > 0
+
+        cursor.close()
+        conn.close()
+
+        return updated
+
+
+    @staticmethod
+    def cleanup_completed_tasks(user_id):
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.callproc(
+            "sp_cleanup_completed_tasks",
+            [user_id]
+        )
+
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        return True
