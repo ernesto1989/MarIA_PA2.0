@@ -46,7 +46,7 @@ class UserService:
 
     # Método que busca un usuario por su id de Telegram en la base de datos.
     @staticmethod
-    def find_user_by_telegram(telegram_user_id):
+    def find_user_by_telegram_id(telegram_user_id):
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)

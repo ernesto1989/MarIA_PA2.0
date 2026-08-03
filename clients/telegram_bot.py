@@ -21,38 +21,118 @@ from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
+    ConversationHandler,
     MessageHandler,
     ContextTypes,
     filters
 )
 
 from agent.assistant import MariaAssistant
+from services.user_service import UserService
 
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN") #el token para comunicarse con telegram. Se obtiene de BotFather en Telegram.
 assistant = MariaAssistant() #El agente MarIA.
 
+# Estados del registro
+ASK_NAME = 1
 
 #Método que se llama cuando el usuario envía el comando /start. Se le da la bienvenida al usuario.
 async def start(update: Update,
                 context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
-        "¡Hola! Soy MarIA 👋"
+        "¡Hola! Soy MarIA - Asistente virtual 👋"
     )
+
 
 #Método que se llama cuando el usuario quiere registrarse.
 #Not implemented yet. Se deberá implementar la lógica de registro de usuarios.
-async def register(update: Update,
-                   context: ContextTypes.DEFAULT_TYPE):
-    pass
+async def register(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
+    await update.message.reply_text(
+        "¡Bienvenido!\n\n"
+        "Para registrarte necesito tu nombre completo.\n\n"
+        "¿Cómo quieres que te llame?"
+    )
+
+    return ASK_NAME
+
+async def register_name(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    telegram_id = update.effective_user.id
+
+    name = update.message.text.strip()
+
+    # ¿Ya existe?
+    user = UserService.find_user_by_telegram_id(
+        telegram_id
+    )
+
+    if user is not None:
+        #El usuario ya está registrado en telegram
+        await update.message.reply_text(
+            "Ya existe una solicitud de registro asociada a esta cuenta."
+        )
+
+        return ConversationHandler.END
+
+    # Registrar usuario
+    UserService.add_user(
+        name=name,
+        telegram_user_id=telegram_id
+    )
+
+    await update.message.reply_text(
+        f"Gracias {name}.\n\n"
+        "Espera a que el administrador apruebe tu registro. Te avisaré cuando esté listo."
+    )
+
+    return ConversationHandler.END
+
+
+#Método que se llama cuando el usuario quiere solicitar ayuda al bot.
 #Método que se llama cuando el usuario quiere solicitar ayuda al bot.
 async def help_command(update: Update,
                        context: ContextTypes.DEFAULT_TYPE):
-    pass
+    help_text = """
+        🤖 *MarIA*
 
+        Asistente personal para la gestión de actividades.
+
+        *Comandos disponibles*
+
+        /help
+        Muestra esta ayuda.
+
+        /register
+        Solicita el registro para utilizar MarIA.
+
+        *Actualmente puedo:*
+
+        • Consultar tus actividades.
+        • Responder preguntas sobre tus pendientes.
+
+        *Próximamente:*
+
+        • Crear actividades.
+        • Actualizar actividades.
+        • Marcar actividades como terminadas.
+        • Recordatorios automáticos.
+        • Resúmenes semanales.
+        """
+
+    await update.message.reply_text(
+        help_text,
+        parse_mode="Markdown"
+    )
 
 #Método responsable de procesar los mensajes del usuario.
 #
@@ -75,6 +155,31 @@ async def echo(update: Update,
         response
     )
 
+register_handler = ConversationHandler(
+
+    entry_points=[
+        CommandHandler(
+            "register",
+            register
+        )
+    ],
+
+    states={
+
+        ASK_NAME: [
+
+            MessageHandler(
+                filters.TEXT & ~filters.COMMAND,
+                register_name
+            )
+
+        ]
+
+    },
+
+    fallbacks=[]
+)
+
 
 # --------------------------------------------------
 # Función principal
@@ -88,22 +193,13 @@ def main():
     #Aquí se crea un app con el token del bot, y se registran los handlers de comandos y mensajes.
     app = Application.builder().token(TOKEN).build()
 
-    #Comando /start
-    #supongo que algo similar deberá hacerse para /register y /help, pero no lo implementé todavía.
-    app.add_handler(
-        CommandHandler(
-            "start",
-            start
-        )
-    )
+    app.add_handler(CommandHandler("start",start))
+    app.add_handler(CommandHandler("help",help_command))
+
+    app.add_handler(register_handler)
 
     #Handler que llama al método echo cuando el usuario envía un mensaje de texto que no es un comando.
-    app.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            echo
-        )
-    )
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,echo))
 
     print("MarIA está ejecutándose...")
     app.run_polling() #arranca el bot y lo pone a escuchar mensajes de Telegram mediante Polling. Deberá cambiarse a Webhooks en producción.
