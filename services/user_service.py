@@ -2,6 +2,7 @@ from database.connection import get_connection
 
 class UserService:
 
+    #Método que busca un usuario por su id en la base de datos.
     @staticmethod
     def find_user_by_id(user_id):
 
@@ -21,6 +22,7 @@ class UserService:
 
         return user
 
+    #método que ubica al usuario admin (ECV). Se utiliza para solicitar autorización de nuevos registros.
     staticmethod
     def find_admin():
 
@@ -42,7 +44,7 @@ class UserService:
 
         return admin
 
-
+    # Método que busca un usuario por su id de Telegram en la base de datos.
     @staticmethod
     def find_user_by_telegram(telegram_user_id):
 
@@ -62,7 +64,7 @@ class UserService:
 
         return user
 
-
+    #Metodo que agrega un nuevo usuario a la base de datos. Se le da el nombre y el id de Telegram del usuario.
     @staticmethod
     def add_user(name, telegram_user_id):
 
@@ -94,7 +96,7 @@ class UserService:
 
         return new_id
 
-
+    #Metodo que actualiza la información de un usuario en la base de datos. Se le puede dar un nuevo nombre y/o un nuevo estado.
     @staticmethod
     def update_user(user_id,
                     name=None,

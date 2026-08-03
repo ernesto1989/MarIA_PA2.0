@@ -1,3 +1,9 @@
+-- DDL MarIA_pa Database.
+-- Tabla usuarios: Registra a los usuarios de MarIA, con el telegram_user_id. Solo accede desde Telegram.
+-- Tabla activities: Registra las actividades de los usuarios, con título, fecha de vencimiento, prioridad y estado. 
+-- Stored Procedure sp_cleanup_completed_tasks: Elimina las actividades completadas de un usuario específico.
+
+
 CREATE TABLE users (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
     telegram_user_id BIGINT UNSIGNED NOT NULL,

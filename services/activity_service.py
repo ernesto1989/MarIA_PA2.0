@@ -1,8 +1,12 @@
 from database.connection import get_connection
 
-
+#Gestión de actividades (tareas) del usuario.
+#Los métodos se desarrollan de manera estática, ya que no es necesario instanciar la clase para poder usarlos.
+#Adicionalmente se plantean de manera genérica (como find_tasks) con el objetivo de que el agente pueda llamarlos de manera dinámica, 
+#sin necesidad de conocer la firma exacta de cada método.
 class ActivityService:
 
+    #Busca una actividad por id
     @staticmethod
     def find_task(task_id):
 
@@ -22,7 +26,7 @@ class ActivityService:
 
         return task
 
-
+    #Busca todas las actividades de un usuario, con filtros opcionales.
     @staticmethod
     def find_tasks(
         user_id,
@@ -80,7 +84,7 @@ class ActivityService:
 
         return tasks
 
-
+    #Agrega actividades del usuario
     @staticmethod
     def add_task(user_id,
                  title,
@@ -122,6 +126,7 @@ class ActivityService:
         return task_id
 
 
+    #Actualiza una actividad
     @staticmethod
     def update_task(task_id,
                     title=None,
@@ -173,7 +178,7 @@ class ActivityService:
 
         return updated
 
-
+    #Elimina todas las actividades completadas
     @staticmethod
     def cleanup_completed_tasks(user_id):
 
