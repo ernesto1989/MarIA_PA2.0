@@ -1,3 +1,11 @@
+'''
+Bot de MarIA. 
+
+Archivo que crea el agente y lo conecta con el LLM.
+Es importante mencionar que el LLM genera solo el procesamiento de lenguaje natural.
+El agente contiene los tools necesarios para realizar las acciones a las cuales se le programó.
+
+'''
 import os
 
 from dotenv import load_dotenv
@@ -23,7 +31,7 @@ class MariaAssistant:
     ):
 
         # Buscar al usuario por su Telegram ID
-        user = UserService.find_user_by_telegram(
+        user = UserService.find_user_by_telegram_id(
             telegram_user_id
         )
 

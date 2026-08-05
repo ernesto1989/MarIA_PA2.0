@@ -1,3 +1,15 @@
+'''
+scheduler.py
+
+Archivo que contiene la creación del servicio de Programación de Tareas.
+De momento crea 4 tareas:
+
+1. Busqueda diaria de tareas
+2. Búsqueda semanal de tareas
+3. Búsqueda mensual de tareas.
+4. Borrado de tareas terminadas
+
+'''
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from .jobs import daily_tasks_job, week_tasks_job, month_tasks_job,clean_tasks_job
@@ -11,10 +23,11 @@ def start_scheduler():
     scheduler.add_job(
         daily_tasks_job,
         trigger="cron",
-        hour=7,
-        minute=0,
+        hour=10,
+        minute=15,
         id="daily_tasks",
-        replace_existing=True
+        replace_existing=True,
+        misfire_grace_time=300
     )
 
     #Recordatorio semanal de tareas pendientes
@@ -25,7 +38,8 @@ def start_scheduler():
         hour=6,
         minute=30,
         id="week_tasks",
-        replace_existing=True
+        replace_existing=True,
+        misfire_grace_time=300
     )
 
     #Recordatorio mensual de tareas pendientes
@@ -36,7 +50,8 @@ def start_scheduler():
         hour=6,
         minute=30,
         id="month_tasks",
-        replace_existing=True
+        replace_existing=True,
+        misfire_grace_time=300
     )
 
     # scheduler.add_job(
@@ -46,15 +61,17 @@ def start_scheduler():
     #     hour=6,
     #     minute=30,
     #     id="clean_tasks",
-    #     replace_existing=True
+    #     replace_existing=True,
+    #     misfire_grace_time=300
     # )
     scheduler.add_job(
         clean_tasks_job,
         trigger="cron",
-        hour=7,
-        minute=0,
+        hour=10,
+        minute=20,
         id="clean_tasks",
-        replace_existing=True
+        replace_existing=True,
+        misfire_grace_time=300
     )
 
     scheduler.start()

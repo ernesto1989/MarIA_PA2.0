@@ -1,3 +1,18 @@
+'''
+user_service.py
+
+Gestión de usuario.
+
+Se incluye:
+
+1. Buscar una usuario por id
+2. Buscar usuario admin
+3. Búsqueda de usuario por telegram id
+4. Búsqueda de usuarios activos
+5. Agregar usuario
+6. Actualizar usuario
+
+'''
 from database.connection import get_connection
 
 class UserService:
@@ -64,6 +79,7 @@ class UserService:
 
         return user
 
+    #Método que genera una lista de usuarios activos
     @staticmethod
     def find_active_users():
 

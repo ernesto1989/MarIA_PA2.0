@@ -1,8 +1,15 @@
 """
 reminder_service.py
 
-Contiene la lógica de negocio relacionada con
-recordatorios automáticos de MarIA.
+Archivo que contiene todos los procesos que se ejecutarán por jobs
+automáticos para notificaciones al usuario.
+
+Se incluyen:
+1. Proceso de notificación diario de tareas (para ese día)
+2. Proceso de notificación semanal de tareas
+3. Proceso de notificación mensual de tareas.
+4. Proceso de limpieza de Base de Datos de actividades terminadas.
+
 """
 
 from services.user_service import UserService
@@ -18,6 +25,8 @@ from notifications.notifier import (
 
 class ReminderService:
 
+    #Método que automatiza la búsqueda de todos las tareas de ese día de todos los usuarios. Es consumido por el job de 
+    #recordatorios diarios.
     @staticmethod
     async def daily_tasks():
 
@@ -38,6 +47,8 @@ class ReminderService:
                 tasks
             )
 
+    #Método que automatiza la búsqueda de todos las tareas de esa semana de todos los usuarios. Es consumido por el job de 
+    #recordatorios semanales.
     @staticmethod
     async def week_tasks():
 
@@ -58,6 +69,8 @@ class ReminderService:
                 tasks
             )
 
+    #Método que automatiza la búsqueda de todos las tareas de ese mes de todos los usuarios. Es consumido por el job de 
+    #recordatorios mensuales.
     @staticmethod
     async def month_tasks():
 
@@ -78,6 +91,8 @@ class ReminderService:
                 tasks
             )
 
+    #Método que automatiza la limpieza de base de datos buscando actividades terminadas.
+    #Al finalizar, notifica al usuario administrador el cumplimiento de la tarea.
     @staticmethod
     async def clean_tasks():
 

@@ -1,3 +1,9 @@
+'''
+connection.py
+
+Módulo de conexión a base de datos
+Lee de variables de entorno lo necesario para conectarse a la base de datos.
+'''
 import os
 
 import mysql.connector

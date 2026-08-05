@@ -1,9 +1,26 @@
+'''
+activity_service.py
+
+Gestión de actividades (tareas) del usuario.
+
+Los métodos se desarrollan de manera estática, ya que no es necesario instanciar la clase para poder usarlos.
+Adicionalmente se plantean de manera genérica (como find_tasks) con el objetivo de que el agente pueda llamarlos de manera dinámica, 
+sin necesidad de conocer la firma exacta de cada método.
+
+Se incluye:
+
+1. Buscar una actividad por id
+2. Buscar todas las actividades de un usuario
+3. Búsqueda de tareas del día
+4. Búsqueda de tareas de la semana
+5. Búsqueda de tareas del mes
+6. Agregar una nueva tarea
+7. Actualizar una tarea
+8. Borrado de todas las tareas
+
+'''
 from database.connection import get_connection
 
-#Gestión de actividades (tareas) del usuario.
-#Los métodos se desarrollan de manera estática, ya que no es necesario instanciar la clase para poder usarlos.
-#Adicionalmente se plantean de manera genérica (como find_tasks) con el objetivo de que el agente pueda llamarlos de manera dinámica, 
-#sin necesidad de conocer la firma exacta de cada método.
 class ActivityService:
 
     #Busca una actividad por id
@@ -245,14 +262,13 @@ class ActivityService:
 
     #Elimina todas las actividades completadas
     @staticmethod
-    def cleanup_completed_tasks(user_id):
+    def cleanup_completed_tasks():
 
         conn = get_connection()
         cursor = conn.cursor()
 
         cursor.callproc(
-            "sp_cleanup_completed_tasks",
-            [user_id]
+            "sp_cleanup_completed_tasks"
         )
 
         conn.commit()

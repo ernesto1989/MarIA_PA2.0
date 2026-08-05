@@ -1,3 +1,8 @@
+'''
+templates.py
+
+Contiene los templates de téxto a enviar a usuarios bajo ciertas condiciones.
+'''
 NEW_USER_TEMPLATE = """
 🔔 Nuevo usuario registrado
 

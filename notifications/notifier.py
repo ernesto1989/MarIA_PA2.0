@@ -1,3 +1,14 @@
+'''
+notifier.py
+
+Procesa todo el envío de mensajes al usuario para ciertos aspectos importantes.
+
+1.Notifica al admin de un nuevo usuario y al usuario si fue o no aprovado
+2.Notifica los pendientes del día
+3.Notifica los pendientes de la semana
+4.Notifica los pendientes del mes.
+5.Notifica al admin del borrado de actividades. 
+'''
 from clients import telegram_client
 
 from .templates import (
@@ -8,7 +19,7 @@ from .templates import (
 
 from services.user_service import UserService
 
-
+#Notifica al admin del registro
 async def notify_admin_new_user(
     admin,
     user
@@ -25,7 +36,7 @@ async def notify_admin_new_user(
         message
     )
 
-
+#notifica si el usuario fue aprobado
 async def notify_user_approved(user):
 
     await telegram_client.send_message(
@@ -33,7 +44,7 @@ async def notify_user_approved(user):
         USER_APPROVED_TEMPLATE
     )
 
-
+#notifica si el usuario fue rechazado
 async def notify_user_denied(user):
 
     await telegram_client.send_message(
@@ -41,6 +52,9 @@ async def notify_user_denied(user):
         USER_DENIED_TEMPLATE
     )
 
+## Estos notifications no tienen tamplate porque se crean al vuelo.
+
+#Notificación de tareas diarias
 async def notify_daily_tasks(
     user,
     tasks
@@ -63,6 +77,7 @@ async def notify_daily_tasks(
         message
     )
 
+#Notificación de tareas semanales
 async def notify_week_tasks(
     user,
     tasks
@@ -85,6 +100,7 @@ async def notify_week_tasks(
         message
     )
 
+#Notificación de tareas mensuales
 async def notify_month_tasks(
     user,
     tasks
@@ -107,6 +123,7 @@ async def notify_month_tasks(
         message
     )
 
+#Notificación de borrado de tareas
 async def notify_clean_tasks():
 
     message = "Borrado de actividades terminadas ejecutado. Gracias por confiar en MarIA."

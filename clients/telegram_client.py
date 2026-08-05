@@ -1,6 +1,11 @@
-#A diferencia del telegram bot que responde mensajes enviados por el usuario,
-#el telegram cliente envía mensajes desde el backend al usuario.
+'''
+A diferencia del telegram bot que responde mensajes enviados por el usuario,
+el telegram cliente envía mensajes desde el backend al usuario.
 
+El telegram client funciona como el teléfono celular del agente con su propia cuenta
+de telegram. El agente lo usa por ende para escribirnos mensajes que está detectando.
+
+'''
 from telegram import Bot
 
 #Clase que concentra el envío de mensajes desde el backend al usuario de Telegram.
