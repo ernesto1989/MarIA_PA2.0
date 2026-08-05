@@ -84,6 +84,26 @@ class ActivityService:
 
         return tasks
 
+    #Método que busca las actividades del usuario que vencen hoy. Se usa para enviar recordatorios diarios.
+    @staticmethod
+    def find_tasks_for_today(user_id):
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT *
+            FROM activities
+            WHERE user_id=%s AND due_date = CURDATE()
+        """, (user_id,))
+
+        tasks = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return tasks
+
     #Agrega actividades del usuario
     @staticmethod
     def add_task(user_id,

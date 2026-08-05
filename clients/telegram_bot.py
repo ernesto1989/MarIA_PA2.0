@@ -28,7 +28,11 @@ from telegram.ext import (
 )
 
 from agent.assistant import MariaAssistant
+from notifications.notifier import notify_admin_new_user,notify_user_approved,notify_user_denied
 from services.user_service import UserService
+from clients import telegram_client
+from services.reminder_service import ReminderService
+
 
 
 load_dotenv()
@@ -45,58 +49,6 @@ async def start(update: Update,
     await update.message.reply_text(
         "¡Hola! Soy MarIA - Asistente virtual 👋"
     )
-
-
-#Método que se llama cuando el usuario quiere registrarse.
-#Not implemented yet. Se deberá implementar la lógica de registro de usuarios.
-async def register(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    await update.message.reply_text(
-        "¡Bienvenido!\n\n"
-        "Para registrarte necesito tu nombre completo.\n\n"
-        "¿Cómo quieres que te llame?"
-    )
-
-    return ASK_NAME
-
-async def register_name(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    telegram_id = update.effective_user.id
-
-    name = update.message.text.strip()
-
-    # ¿Ya existe?
-    user = UserService.find_user_by_telegram_id(
-        telegram_id
-    )
-
-    if user is not None:
-        #El usuario ya está registrado en telegram
-        await update.message.reply_text(
-            "Ya existe una solicitud de registro asociada a esta cuenta."
-        )
-
-        return ConversationHandler.END
-
-    # Registrar usuario
-    UserService.add_user(
-        name=name,
-        telegram_user_id=telegram_id
-    )
-
-    await update.message.reply_text(
-        f"Gracias {name}.\n\n"
-        "Espera a que el administrador apruebe tu registro. Te avisaré cuando esté listo."
-    )
-
-    return ConversationHandler.END
-
 
 #Método que se llama cuando el usuario quiere solicitar ayuda al bot.
 #Método que se llama cuando el usuario quiere solicitar ayuda al bot.
@@ -128,11 +80,248 @@ async def help_command(update: Update,
         • Recordatorios automáticos.
         • Resúmenes semanales.
         """
-
+    await ReminderService.daily_tasks()
+    
     await update.message.reply_text(
         help_text,
         parse_mode="Markdown"
     )
+
+
+#Método que se llama cuando el usuario quiere registrarse.
+#Solo solicita el nombre del usuario.
+async def register(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await update.message.reply_text(
+        "¡Bienvenido!\n\n"
+        "Para registrarte necesito tu nombre completo.\n\n"
+        "¿Cómo quieres que te llame?"
+    )
+
+    return ASK_NAME
+
+#Método que se llama cuando el usuario envía su nombre para registrarse.
+#Se verifica si el usuario ya existe, si no existe se registra y se notifica al administrador.
+#Se responde con un mensaje de recepción de solicitud al usuario.
+#Hace equipo con el método register.
+async def register_name(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    telegram_id = update.effective_user.id
+
+    name = update.message.text.strip()
+
+    # Verificar si el usuario ya existe
+    user = UserService.find_user_by_telegram_id(
+        telegram_id
+    )
+
+    if user is not None:
+
+        if user["status"] == "ACTIVE":
+
+            await update.message.reply_text(
+                "Ya estás registrado y tu cuenta se encuentra activa."
+            )
+
+        elif user["status"] == "PENDING":
+
+            await update.message.reply_text(
+                "Ya existe una solicitud de registro pendiente de aprobación."
+            )
+
+        else:
+
+            await update.message.reply_text(
+                "Tu cuenta se encuentra deshabilitada. Contacta al administrador."
+            )
+
+        return ConversationHandler.END
+
+    try:
+
+        # Registrar usuario
+        UserService.add_user(
+            name=name,
+            telegram_user_id=telegram_id
+        )
+
+        # Recuperar el usuario recién creado
+        user = UserService.find_user_by_telegram(
+            telegram_id
+        )
+
+        # Buscar administrador
+        admin = UserService.find_admin()
+
+        # Notificar al administrador
+        await notify_admin_new_user(
+            admin,
+            user
+        )
+
+        # Confirmar al usuario
+        await update.message.reply_text(
+            "✅ Tu solicitud fue registrada correctamente.\n\n"
+            "El administrador ha sido notificado y recibirá una solicitud para aprobar tu acceso.\n\n"
+            "Recibirás una notificación cuando tu cuenta sea aprobada."
+        )
+
+    except Exception as ex:
+
+        print(ex)
+
+        await update.message.reply_text(
+            "❌ Ocurrió un error al registrar tu solicitud.\n"
+            "Inténtalo nuevamente más tarde."
+        )
+
+    return ConversationHandler.END
+
+
+
+
+#Método utilizado solo para el admin. El objetivo es que cuando el admin
+#recibe una solicitud de registro, autoriza o no al usuario. 
+#Si lo autoriza, se le notifica al usuario que su cuenta fue aprobada.
+async def approve(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    admin = UserService.find_user_by_telegram(
+        update.effective_user.id
+    )
+
+    if admin is None or admin["role"] != "ADMIN":
+
+        await update.message.reply_text(
+            "No tienes permisos para ejecutar este comando."
+        )
+
+        return
+
+    if len(context.args) != 1:
+
+        await update.message.reply_text(
+            "Solo puedes autorizar 1 usuario a la vez.\nUso: /approve <user_id>"
+        )
+
+        return
+
+    try:
+
+        user_id = int(context.args[0])
+
+    except ValueError:
+
+        await update.message.reply_text(
+            "El id del usuario no es válido."
+        )
+
+        return
+
+    user = UserService.find_user_by_id(
+        user_id
+    )
+
+    if user is None:
+
+        await update.message.reply_text(
+            "Usuario no encontrado."
+        )
+
+        return
+
+    UserService.update_user(
+        user_id=user_id,
+        status="ACTIVE"
+    )
+
+    user = UserService.find_user_by_id(
+        user_id
+    )
+
+    await notify_user_approved(
+        user
+    )
+
+    await update.message.reply_text(
+        f"✅ Usuario {user['name']} aprobado correctamente."
+    )
+
+#Método que rechaza la petición de registro de un usuario. Solo puede ser ejecutado por el admin.
+async def deny(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    admin = UserService.find_user_by_telegram(
+        update.effective_user.id
+    )
+
+    if admin is None or admin["role"] != "ADMIN":
+
+        await update.message.reply_text(
+            "No tienes permisos para ejecutar este comando."
+        )
+
+        return
+
+    if len(context.args) != 1:
+
+        await update.message.reply_text(
+            "Uso: /deny <user_id>"
+        )
+
+        return
+
+    try:
+
+        user_id = int(context.args[0])
+
+    except ValueError:
+
+        await update.message.reply_text(
+            "El id del usuario no es válido."
+        )
+
+        return
+
+    user = UserService.find_user_by_id(
+        user_id
+    )
+
+    if user is None:
+
+        await update.message.reply_text(
+            "Usuario no encontrado."
+        )
+
+        return
+
+    UserService.update_user(
+        user_id=user_id,
+        status="DISABLED"
+    )
+
+    user = UserService.find_user_by_id(
+        user_id
+    )
+
+    await notify_user_denied(
+        user
+    )
+
+    await update.message.reply_text(
+        f"❌ Usuario {user['name']} rechazado."
+    )
+
 
 #Método responsable de procesar los mensajes del usuario.
 #
@@ -180,7 +369,6 @@ register_handler = ConversationHandler(
     fallbacks=[]
 )
 
-
 # --------------------------------------------------
 # Función principal
 #
@@ -195,6 +383,8 @@ def main():
 
     app.add_handler(CommandHandler("start",start))
     app.add_handler(CommandHandler("help",help_command))
+    app.add_handler(CommandHandler("approve",approve))
+    app.add_handler(CommandHandler("deny",deny))
 
     app.add_handler(register_handler)
 
@@ -203,8 +393,7 @@ def main():
 
     print("MarIA está ejecutándose...")
     app.run_polling() #arranca el bot y lo pone a escuchar mensajes de Telegram mediante Polling. Deberá cambiarse a Webhooks en producción.
-
-
+    
 #
 # Punto de entrada al Telegram Bot.
 if __name__ == "__main__":

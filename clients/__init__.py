@@ -16,5 +16,11 @@ Ernesto Cantú
 03/08/2026
 
 """
+import os
 
-__version__ = "1.0.0"
+from dotenv import load_dotenv
+
+from .telegram_client import TelegramClient
+load_dotenv()
+
+telegram_client = TelegramClient(os.getenv("BOT_TOKEN")) #El cliente de Telegram que envía mensajes desde el backend al usuario.

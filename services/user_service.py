@@ -64,6 +64,25 @@ class UserService:
 
         return user
 
+    @staticmethod
+    def find_active_users():
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT *
+            FROM users
+            WHERE status = %s
+        """, ("ACTIVE",))
+
+        user = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return user
+
     #Metodo que agrega un nuevo usuario a la base de datos. Se le da el nombre y el id de Telegram del usuario.
     @staticmethod
     def add_user(name, telegram_user_id):
