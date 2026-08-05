@@ -7,6 +7,7 @@ de telegram. El agente lo usa por ende para escribirnos mensajes que está detec
 
 '''
 from telegram import Bot
+from utils.logger import logger
 
 #Clase que concentra el envío de mensajes desde el backend al usuario de Telegram.
 class TelegramClient:
@@ -19,7 +20,7 @@ class TelegramClient:
         telegram_user_id: int,
         message: str
     ):
-
+        logger.info("Enviando mensaje a usuario telegram")
         await self.bot.send_message(
             chat_id=telegram_user_id,
             text=message

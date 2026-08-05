@@ -14,6 +14,7 @@ Se incluyen:
 
 from services.user_service import UserService
 from services.activity_service import ActivityService
+from utils.logger import logger
 
 from notifications.notifier import (
     notify_daily_tasks,
@@ -29,74 +30,86 @@ class ReminderService:
     #recordatorios diarios.
     @staticmethod
     async def daily_tasks():
+        try:
+            # Obtener todos los usuarios activos
+            users = UserService.find_active_users()
 
-        # Obtener todos los usuarios activos
-        users = UserService.find_active_users()
+            for user in users:
 
-        for user in users:
+                tasks = ActivityService.find_tasks_for_today(
+                    user["id"]
+                )
 
-            tasks = ActivityService.find_tasks_for_today(
-                user["id"]
-            )
+                if not tasks:
+                    continue
 
-            if not tasks:
-                continue
-
-            await notify_daily_tasks(
-                user,
-                tasks
-            )
+                await notify_daily_tasks(
+                    user,
+                    tasks
+                )
+        except Exception:
+            logger.exception("Error ejecutando recordatorios diarios")
+            raise
 
     #Método que automatiza la búsqueda de todos las tareas de esa semana de todos los usuarios. Es consumido por el job de 
     #recordatorios semanales.
     @staticmethod
     async def week_tasks():
+        try:
+            # Obtener todos los usuarios activos
+            users = UserService.find_active_users()
 
-        # Obtener todos los usuarios activos
-        users = UserService.find_active_users()
+            for user in users:
 
-        for user in users:
+                tasks = ActivityService.find_tasks_for_this_week(
+                    user["id"]
+                )
 
-            tasks = ActivityService.find_tasks_for_this_week(
-                user["id"]
-            )
+                if not tasks:
+                    continue
 
-            if not tasks:
-                continue
-
-            await notify_week_tasks(
-                user,
-                tasks
-            )
+                await notify_week_tasks(
+                    user,
+                    tasks
+                )
+        except Exception:
+            logger.exception("Error ejecutando recordatorios semanales")
+            raise
 
     #Método que automatiza la búsqueda de todos las tareas de ese mes de todos los usuarios. Es consumido por el job de 
     #recordatorios mensuales.
     @staticmethod
     async def month_tasks():
+        try:
+            # Obtener todos los usuarios activos
+            users = UserService.find_active_users()
 
-        # Obtener todos los usuarios activos
-        users = UserService.find_active_users()
+            for user in users:
 
-        for user in users:
+                tasks = ActivityService.find_tasks_for_this_month(
+                    user["id"]
+                )
 
-            tasks = ActivityService.find_tasks_for_this_month(
-                user["id"]
-            )
+                if not tasks:
+                    continue
 
-            if not tasks:
-                continue
-
-            await notify_month_tasks(
-                user,
-                tasks
-            )
+                await notify_month_tasks(
+                    user,
+                    tasks
+                )
+        except Exception:
+            logger.exception("Error ejecutando recordatorios mensuales")
+            raise
 
     #Método que automatiza la limpieza de base de datos buscando actividades terminadas.
     #Al finalizar, notifica al usuario administrador el cumplimiento de la tarea.
     @staticmethod
     async def clean_tasks():
-
-        ActivityService.cleanup_completed_tasks()
-        await notify_clean_tasks()
+        try:
+            ActivityService.cleanup_completed_tasks()
+            await notify_clean_tasks()
+        except Exception:
+            logger.exception("Error ejecutando limpieza de tareas completadas")
+            raise
 
             

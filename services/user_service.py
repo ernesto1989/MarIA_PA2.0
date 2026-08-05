@@ -14,161 +14,195 @@ Se incluye:
 
 '''
 from database.connection import get_connection
+from utils.logger import logger
 
 class UserService:
 
     #Método que busca un usuario por su id en la base de datos.
     @staticmethod
     def find_user_by_id(user_id):
+        try:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
 
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT *
+                FROM users
+                WHERE id = %s
+            """, (user_id,))
 
-        cursor.execute("""
-            SELECT *
-            FROM users
-            WHERE id = %s
-        """, (user_id,))
+            user = cursor.fetchone()
 
-        user = cursor.fetchone()
+            cursor.close()
+            conn.close()
 
-        cursor.close()
-        conn.close()
-
-        return user
+            return user
+        except Exception:
+            logger.exception(
+                f"Error buscando usuario {user_id}"
+            )
+            raise
 
     #método que ubica al usuario admin (ECV). Se utiliza para solicitar autorización de nuevos registros.
-    staticmethod
+    @staticmethod
     def find_admin():
+        try:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
 
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT *
+                FROM users
+                WHERE role = 'ADMIN'
+                AND status = 'ACTIVE'
+                LIMIT 1
+            """)
 
-        cursor.execute("""
-            SELECT *
-            FROM users
-            WHERE role = 'ADMIN'
-            AND status = 'ACTIVE'
-            LIMIT 1
-        """)
+            admin = cursor.fetchone()
 
-        admin = cursor.fetchone()
+            cursor.close()
+            conn.close()
 
-        cursor.close()
-        conn.close()
-
-        return admin
+            return admin
+        except Exception:
+            logger.exception("Error buscando admin")
+            raise
 
     # Método que busca un usuario por su id de Telegram en la base de datos.
     @staticmethod
     def find_user_by_telegram_id(telegram_user_id):
+        try:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
 
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT *
+                FROM users
+                WHERE telegram_user_id = %s
+            """, (telegram_user_id,))
 
-        cursor.execute("""
-            SELECT *
-            FROM users
-            WHERE telegram_user_id = %s
-        """, (telegram_user_id,))
+            user = cursor.fetchone()
 
-        user = cursor.fetchone()
+            cursor.close()
+            conn.close()
 
-        cursor.close()
-        conn.close()
-
-        return user
+            return user
+        except Exception:
+            logger.exception(f"Error buscando usuario por telegram_id {telegram_user_id}")
+            raise
 
     #Método que genera una lista de usuarios activos
     @staticmethod
     def find_active_users():
+        try:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
 
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT *
+                FROM users
+                WHERE status = %s
+            """, ("ACTIVE",))
 
-        cursor.execute("""
-            SELECT *
-            FROM users
-            WHERE status = %s
-        """, ("ACTIVE",))
+            user = cursor.fetchall()
 
-        user = cursor.fetchall()
+            cursor.close()
+            conn.close()
 
-        cursor.close()
-        conn.close()
-
-        return user
+            return user
+        except Exception:
+            logger.exception("Error buscando usuarios activos")
+            raise
 
     #Metodo que agrega un nuevo usuario a la base de datos. Se le da el nombre y el id de Telegram del usuario.
     @staticmethod
     def add_user(name, telegram_user_id):
+        conn = None
+        cursor = None
+        try:
+            conn = get_connection()
+            conn.start_transaction()
+            cursor = conn.cursor(dictionary=True)
 
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            INSERT INTO users
-            (
+            cursor.execute("""
+                INSERT INTO users
+                (
+                    telegram_user_id,
+                    name
+                )
+                VALUES
+                (
+                    %s,
+                    %s
+                )
+            """, (
                 telegram_user_id,
                 name
-            )
-            VALUES
-            (
-                %s,
-                %s
-            )
-        """, (
-            telegram_user_id,
-            name
-        ))
+            ))
 
-        conn.commit()
+            user_id = cursor.lastrowid
+            conn.commit()
 
-        new_id = cursor.lastrowid
-
-        cursor.close()
-        conn.close()
-
-        return new_id
+            #cursor.close()
+            #conn.close()
+            logger.info(f"usuario agregado con telegram_id={telegram_user_id} name={name} y user_id={user_id}")
+            return user_id
+        
+        except Exception:
+            if conn: conn.rollback()
+            logger.exception(f"Error agregando usuario telegram_id={telegram_user_id} name={name}")
+            raise
+        finally:
+            if cursor: cursor.close()
+            if conn: conn.close()
 
     #Metodo que actualiza la información de un usuario en la base de datos. Se le puede dar un nuevo nombre y/o un nuevo estado.
     @staticmethod
     def update_user(user_id,
                     name=None,
                     status=None):
+        conn = None
+        cursor = None
+        try:
+            conn = get_connection()
+            conn.start_transaction()
 
-        conn = get_connection()
-        cursor = conn.cursor()
+            cursor = conn.cursor(dictionary=True)
 
-        updates = []
-        values = []
+            updates = []
+            values = []
 
-        if name is not None:
-            updates.append("name=%s")
-            values.append(name)
+            if name is not None:
+                updates.append("name=%s")
+                values.append(name)
 
-        if status is not None:
-            updates.append("status=%s")
-            values.append(status)
+            if status is not None:
+                updates.append("status=%s")
+                values.append(status)
 
-        if len(updates) == 0:
-            return False
+            if len(updates) == 0:
+                return False
 
-        values.append(user_id)
+            values.append(user_id)
 
-        sql = f"""
-            UPDATE users
-            SET {', '.join(updates)}
-            WHERE id=%s
-        """
+            sql = f"""
+                UPDATE users
+                SET {', '.join(updates)}
+                WHERE id=%s
+            """
 
-        cursor.execute(sql, tuple(values))
+            cursor.execute(sql, tuple(values))
 
-        conn.commit()
+            conn.commit()
 
-        updated = cursor.rowcount > 0
+            updated = cursor.rowcount > 0
 
-        cursor.close()
-        conn.close()
-
-        return updated
+            logger.info(f"usuario actualizado con user_id={user_id}")
+            return updated
+        except Exception:
+            if conn: conn.rollback()
+            logger.exception(f"Error actualizando user_id={user_id}")
+            raise
+        finally:
+            if cursor: cursor.close()
+            if conn: conn.close()

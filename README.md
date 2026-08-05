@@ -218,46 +218,22 @@ python -m clients.telegram_bot
 - [x] Integración con OpenAI Agents
 - [x] Conexión MySQL
 - [x] Servicios
-- [x] Primera Tool (find_tasks)
+- [x] Tools del agente: Administración de tareas
+- [x] Registro de usuarios
+- [x] Aprobación por administrador
+- [x] Scheduler
+- [x] Recordatorios automáticos
 
 ### Pendiente
+- [ ] Recordatorios personalizados del usuario que no caducan.
 
-- [ ] Registro de usuarios
-- [ ] Aprobación por administrador
-- [ ] Scheduler
-- [ ] Recordatorios automáticos
-- [ ] CRUD completo mediante herramientas
-- [ ] Memoria conversacional
-
----
-
-# Roadmap
-
-## v0.2
-
-- Registro de usuarios
-- Activación por administrador
-- Scheduler
-- Recordatorios
-
-## v0.3
-
-- CRUD completo de actividades mediante herramientas
-- Limpieza automática de tareas terminadas
-
-## v0.4
-
-- Integración con Gmail
-- Integración con Google Calendar
-- Integración con Google Drive
 
 ## Futuro
 
+- Modificar tareas para administrar progreso
 - Cliente WhatsApp
-- Cliente Web
 - Memoria persistente
-- Múltiples agentes especializados
-- Dashboard administrativo
+- Dashboard administrativo para vez avances
 
 ---
 
