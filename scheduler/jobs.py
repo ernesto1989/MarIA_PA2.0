@@ -20,3 +20,9 @@ def month_tasks_job():
     asyncio.run(
         ReminderService.month_tasks()
     )
+
+def clean_tasks_job():
+    
+    asyncio.run(
+        ReminderService.clean_tasks()
+    )
