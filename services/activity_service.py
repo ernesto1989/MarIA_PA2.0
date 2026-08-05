@@ -104,6 +104,51 @@ class ActivityService:
 
         return tasks
 
+    @staticmethod
+    def find_tasks_for_this_week(user_id):
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT *
+            FROM activities
+            WHERE user_id = %s
+            AND status = 'IN_PROGRESS'
+            AND due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 6 DAY)
+            ORDER BY due_date ASC, priority DESC
+        """, (user_id,))
+
+        tasks = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return tasks
+
+    @staticmethod
+    def find_tasks_for_this_month(user_id):
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT *
+            FROM activities
+            WHERE user_id = %s
+            AND status = 'IN_PROGRESS'
+            AND due_date BETWEEN CURDATE()
+                            AND LAST_DAY(CURDATE())
+            ORDER BY due_date ASC, priority DESC;
+        """, (user_id,))
+
+        tasks = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return tasks
+
     #Agrega actividades del usuario
     @staticmethod
     def add_task(user_id,

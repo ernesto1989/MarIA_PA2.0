@@ -46,13 +46,10 @@ CREATE TABLE activities (
 
 DELIMITER $$
 
-CREATE PROCEDURE sp_cleanup_completed_tasks(
-    IN p_user_id INT UNSIGNED
-)
+CREATE PROCEDURE sp_cleanup_completed_tasks()
 BEGIN
     DELETE FROM activities
-    WHERE user_id = p_user_id
-      AND status = 'DONE';
+    WHERE status = 'DONE';
 END$$
 
 DELIMITER ;

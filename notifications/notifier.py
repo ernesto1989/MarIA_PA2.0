@@ -6,6 +6,8 @@ from .templates import (
     USER_DENIED_TEMPLATE
 )
 
+from services.user_service import UserService
+
 
 async def notify_admin_new_user(
     admin,
@@ -58,5 +60,60 @@ async def notify_daily_tasks(
 
     await telegram_client.send_message(
         user["telegram_user_id"],
+        message
+    )
+
+async def notify_week_tasks(
+    user,
+    tasks
+):
+
+    message = "📅 Buenos días.\n\n"
+
+    message += "Estas son tus actividades para la semana:\n\n"
+
+    for index, task in enumerate(tasks, start=1):
+
+        message += (
+            f"{index}. {task['title']}\n"
+            f"   Prioridad: {task['priority']}\n"
+            f"   Vence: {task['due_date']}\n\n"
+        )
+
+    await telegram_client.send_message(
+        user["telegram_user_id"],
+        message
+    )
+
+async def notify_month_tasks(
+    user,
+    tasks
+):
+
+    message = "📅 Buenos días.\n\n"
+
+    message += "Estas es tu mes:\n\n"
+
+    for index, task in enumerate(tasks, start=1):
+
+        message += (
+            f"{index}. {task['title']}\n"
+            f"   Prioridad: {task['priority']}\n"
+            f"   Vence: {task['due_date']}\n\n"
+        )
+
+    await telegram_client.send_message(
+        user["telegram_user_id"],
+        message
+    )
+
+async def notify_clean_tasks():
+
+    message = "Borrado de actividades terminadas ejecutado. Gracias por confiar en MarIA."
+
+    user = UserService.find_admin()
+
+    await telegram_client.send_message(
+        user["id"], 
         message
     )

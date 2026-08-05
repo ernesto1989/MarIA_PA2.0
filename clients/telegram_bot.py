@@ -31,7 +31,7 @@ from agent.assistant import MariaAssistant
 from notifications.notifier import notify_admin_new_user,notify_user_approved,notify_user_denied
 from services.user_service import UserService
 from clients import telegram_client
-from services.reminder_service import ReminderService
+from scheduler.scheduler import start_scheduler
 
 
 
@@ -80,7 +80,6 @@ async def help_command(update: Update,
         • Recordatorios automáticos.
         • Resúmenes semanales.
         """
-    await ReminderService.daily_tasks()
     
     await update.message.reply_text(
         help_text,
@@ -152,7 +151,7 @@ async def register_name(
         )
 
         # Recuperar el usuario recién creado
-        user = UserService.find_user_by_telegram(
+        user = UserService.find_user_by_telegram_id(
             telegram_id
         )
 
@@ -194,7 +193,7 @@ async def approve(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    admin = UserService.find_user_by_telegram(
+    admin = UserService.find_user_by_telegram_id(
         update.effective_user.id
     )
 
@@ -261,7 +260,7 @@ async def deny(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    admin = UserService.find_user_by_telegram(
+    admin = UserService.find_user_by_telegram_id(
         update.effective_user.id
     )
 
@@ -392,6 +391,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,echo))
 
     print("MarIA está ejecutándose...")
+    start_scheduler()
     app.run_polling() #arranca el bot y lo pone a escuchar mensajes de Telegram mediante Polling. Deberá cambiarse a Webhooks en producción.
     
 #
