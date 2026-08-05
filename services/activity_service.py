@@ -119,6 +119,10 @@ class ActivityService:
                 SELECT *
                 FROM activities
                 WHERE user_id=%s AND due_date = CURDATE()
+                ORDER BY
+                    priority DESC,
+                    status,
+                    title
             """, (user_id,))
 
             tasks = cursor.fetchall()
@@ -143,7 +147,7 @@ class ActivityService:
                 WHERE user_id = %s
                 AND status = 'IN_PROGRESS'
                 AND due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 6 DAY)
-                ORDER BY due_date ASC, priority DESC
+                ORDER BY priority desc, due_date ASC
             """, (user_id,))
 
             tasks = cursor.fetchall()

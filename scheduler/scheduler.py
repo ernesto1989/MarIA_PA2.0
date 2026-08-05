@@ -11,10 +11,12 @@ De momento crea 4 tareas:
 
 '''
 from apscheduler.schedulers.background import BackgroundScheduler
-
+from zoneinfo import ZoneInfo
 from .jobs import daily_tasks_job, week_tasks_job, month_tasks_job,clean_tasks_job
 
-scheduler = BackgroundScheduler()
+scheduler = BackgroundScheduler(
+    timezone=ZoneInfo("America/Mexico_City")
+)
 
 
 def start_scheduler():
@@ -23,8 +25,8 @@ def start_scheduler():
     scheduler.add_job(
         daily_tasks_job,
         trigger="cron",
-        hour=10,
-        minute=15,
+        hour=6,
+        minute=30,
         id="daily_tasks",
         replace_existing=True,
         misfire_grace_time=300
@@ -47,28 +49,20 @@ def start_scheduler():
         month_tasks_job,
         trigger="cron",
         day=1,
-        hour=6,
+        hour=10,
         minute=30,
         id="month_tasks",
         replace_existing=True,
         misfire_grace_time=300
     )
 
-    # scheduler.add_job(
-    #     clean_tasks_job,
-    #     trigger="cron",
-    #     day=1,
-    #     hour=6,
-    #     minute=30,
-    #     id="clean_tasks",
-    #     replace_existing=True,
-    #     misfire_grace_time=300
-    # )
+    #Borrado de actividades de la semana anterior.
     scheduler.add_job(
         clean_tasks_job,
         trigger="cron",
-        hour=10,
-        minute=20,
+        day_of_week="mon",
+        hour=23,
+        minute=30,
         id="clean_tasks",
         replace_existing=True,
         misfire_grace_time=300

@@ -19,6 +19,12 @@ from .templates import (
 
 from services.user_service import UserService
 
+priority_icons = {
+    "HIGH": "🔴 Alta",
+    "MEDIUM": "🟡 Media",
+    "LOW": "🟢 Baja"
+}
+
 #Notifica al admin del registro
 async def notify_admin_new_user(
     admin,
@@ -57,19 +63,42 @@ async def notify_user_denied(user):
 #Notificación de tareas diarias
 async def notify_daily_tasks(
     user,
-    tasks
+    pending_tasks,
+    completed_tasks
 ):
 
     message = "📅 Buenos días.\n\n"
 
-    message += "Estas son tus actividades para hoy:\n\n"
+    if pending_tasks:
+        message += "Estas son las actividades que tienes programadas para hoy:\n\n"
 
-    for index, task in enumerate(tasks, start=1):
+        for task in sorted(
+            pending_tasks,
+            key=lambda t: t["priority"],
+            reverse=True
+        ):
+
+            message += (
+                f"• {task['title']}\n"
+                f"   {priority_icons[task['priority']]}\n\n"
+            )
+
+    if completed_tasks:
+
+        message += "\n✅ Estas actividades tenían como fecha límite hoy y ya las has completado:\n\n"
+
+        for task in sorted(
+            completed_tasks,
+            key=lambda t: t["priority"],
+            reverse=True
+        ):
+
+            message += f"• {task['title']}\n"
+
+    if not pending_tasks and not completed_tasks:
 
         message += (
-            f"{index}. {task['title']}\n"
-            f"   Prioridad: {task['priority']}\n"
-            f"   Vence: {task['due_date']}\n\n"
+            "Hoy no tienes actividades programadas/por hacer. Puedes rascarte las verijas o lo que te parezca mejor."
         )
 
     await telegram_client.send_message(
@@ -91,7 +120,7 @@ async def notify_week_tasks(
 
         message += (
             f"{index}. {task['title']}\n"
-            f"   Prioridad: {task['priority']}\n"
+            f"    {priority_icons[task['priority']]}\n"
             f"   Vence: {task['due_date']}\n\n"
         )
 
@@ -131,6 +160,6 @@ async def notify_clean_tasks():
     user = UserService.find_admin()
 
     await telegram_client.send_message(
-        user["id"], 
+        user["telegram_user_id"], 
         message
     )

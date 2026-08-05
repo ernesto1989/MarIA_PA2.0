@@ -43,9 +43,20 @@ class ReminderService:
                 if not tasks:
                     continue
 
+                pending_tasks = [
+                    t for t in tasks
+                    if t["status"] == "IN_PROGRESS"
+                ]
+
+                completed_tasks = [
+                    t for t in tasks
+                    if t["status"] == "COMPLETED"
+                ]
+
                 await notify_daily_tasks(
                     user,
-                    tasks
+                    pending_tasks,
+                    completed_tasks
                 )
         except Exception:
             logger.exception("Error ejecutando recordatorios diarios")
