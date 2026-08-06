@@ -20,7 +20,7 @@ from .templates import (
 from services.user_service import UserService
 
 priority_icons = {
-    "HIGH": "🔴 Alta",
+    "URGENT": "🔴 Alta",
     "MEDIUM": "🟡 Media",
     "LOW": "🟢 Baja"
 }
