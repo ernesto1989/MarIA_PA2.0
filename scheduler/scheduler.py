@@ -12,7 +12,8 @@ De momento crea 4 tareas:
 '''
 from apscheduler.schedulers.background import BackgroundScheduler
 from zoneinfo import ZoneInfo
-from .jobs import daily_tasks_job, week_tasks_job, month_tasks_job,clean_tasks_job
+from .jobs import daily_tasks_job, week_tasks_job, month_tasks_job,clean_tasks_job,process_reminders_job
+from utils.logger import logger
 
 scheduler = BackgroundScheduler(
     timezone=ZoneInfo("America/Mexico_City")
@@ -68,6 +69,13 @@ def start_scheduler():
         misfire_grace_time=300
     )
 
-    scheduler.start()
+    scheduler.add_job(
+        process_reminders_job,
+        trigger="cron",
+        minute="*",
+        misfire_grace_time=30,
+        id="process_reminders"
+    )
 
-    print("Scheduler iniciado.")
+    scheduler.start()
+    logger.info("Scheduler iniciado")

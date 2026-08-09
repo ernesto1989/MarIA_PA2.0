@@ -75,4 +75,86 @@ INSERT INTO maria_pa.activities (user_id,title,due_date,priority,status,created_
 	 (2,'Cumpleaños de Claudia Escamilla','2026-08-08','MEDIUM','IN_PROGRESS','2026-08-05 10:33:06','2026-08-05 10:33:06');
 
 
+ALTER TABLE activities
+ADD COLUMN due_time TIME NULL
+AFTER due_date;
 
+
+ALTER TABLE activities
+    ADD KEY idx_activity_scheduler (
+        user_id,
+        status,
+        due_date
+    );
+
+CREATE TABLE reminders (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id INT UNSIGNED NOT NULL,
+    activity_id INT UNSIGNED NULL,
+    title VARCHAR(250) NULL,
+    reminder_type ENUM(
+        'TASK',
+        'ONE_SHOT',
+        'RECURRING'
+    ) NOT NULL,
+    frequency ENUM(
+        'DAILY',
+        'WEEKLY',
+        'MONTHLY',
+        'YEARLY'
+    ) NULL,
+    -- Solo para ONE_SHOT
+    trigger_date DATE NULL,
+    -- Hora del recordatorio
+    trigger_time TIME NULL,
+    -- Solo para TASK
+    remind_before_minutes SMALLINT UNSIGNED NULL,
+    -- Solo MONTHLY y YEARLY
+    day_of_month TINYINT UNSIGNED NULL,
+    -- Solo YEARLY
+    month_of_year TINYINT UNSIGNED NULL,
+    `enabled` BOOLEAN NOT NULL DEFAULT TRUE,
+    last_sent_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_reminder_user (user_id),
+    KEY idx_reminder_activity (activity_id),
+    KEY idx_reminder_scheduler (
+        `enabled`,
+        frequency,
+        trigger_time
+    ),
+    KEY idx_trigger_date (
+        trigger_date,
+        trigger_time
+    ),
+    CONSTRAINT fk_reminder_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_reminder_activity
+        FOREIGN KEY (activity_id)
+        REFERENCES activities(id)
+        ON DELETE CASCADE
+
+);
+
+
+CREATE TABLE reminder_weekdays (
+    reminder_id INT UNSIGNED NOT NULL,
+    `weekday` TINYINT UNSIGNED NOT NULL,
+    PRIMARY KEY (
+        reminder_id,
+        `weekday`
+    ),
+    KEY idx_weekday (`weekday`),
+    CONSTRAINT fk_reminder_weekday
+        FOREIGN KEY (reminder_id)
+        REFERENCES reminders(id)
+        ON DELETE CASCADE
+
+);

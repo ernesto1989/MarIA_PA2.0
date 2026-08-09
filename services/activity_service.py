@@ -191,6 +191,7 @@ class ActivityService:
     def add_task(user_id,
                  title,
                  due_date,
+                 due_time,
                  priority):
         conn = None
         cursor = None
@@ -206,10 +207,12 @@ class ActivityService:
                     user_id,
                     title,
                     due_date,
+                    due_time,
                     priority
                 )
                 VALUES
                 (
+                    %s,
                     %s,
                     %s,
                     %s,
@@ -219,6 +222,7 @@ class ActivityService:
                 user_id,
                 title,
                 due_date,
+                due_time,
                 priority
             ))
 
@@ -242,6 +246,7 @@ class ActivityService:
     def update_task(task_id,
                     title=None,
                     due_date=None,
+                    due_time=None,
                     priority=None,
                     status=None):
         conn = None
@@ -261,6 +266,10 @@ class ActivityService:
             if due_date is not None:
                 updates.append("due_date=%s")
                 values.append(due_date)
+
+            if due_time is not None:
+                updates.append("due_time=%s")
+                values.append(due_time)
 
             if priority is not None:
                 updates.append("priority=%s")

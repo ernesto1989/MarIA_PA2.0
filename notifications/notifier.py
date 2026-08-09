@@ -163,3 +163,44 @@ async def notify_clean_tasks():
         user["telegram_user_id"], 
         message
     )
+
+
+async def notify_task_reminder(reminder):
+
+    message = (
+        "⏰ Recordatorio\n\n"
+        f"Tienes programada la siguiente actividad:\n\n"
+        f"📌 {reminder['title']}\n"
+        f"📅 {reminder['due_date']}\n"
+        f"🕒 {reminder['due_time']}"
+    )
+
+    await telegram_client.send_message(
+        reminder["telegram_user_id"],
+        message
+    )
+
+async def notify_one_shot_reminder(reminder):
+
+    message = (
+        "🔔 Recordatorio\n\n"
+        f"{reminder['title']}"
+    )
+
+    await telegram_client.send_message(
+        reminder["telegram_user_id"],
+        message
+    )
+
+async def notify_recurring_reminder(reminder):
+
+    message = (
+        "🔁 Recordatorio\n\n"
+        f"{reminder['title']}"
+    )
+
+    await telegram_client.send_message(
+        reminder["telegram_user_id"],
+        message
+    )
+
