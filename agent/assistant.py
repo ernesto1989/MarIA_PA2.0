@@ -14,7 +14,8 @@ from services.user_service import UserService
 from .instructions import SYSTEM_PROMPT
 from .tools import build_find_tasks_tool,build_find_task_tool,build_add_task_tool,build_update_task_tool,build_cleanup_completed_tasks_tool,build_add_task_reminder_tool,build_add_one_shot_reminder_tool,build_add_recurring_reminder_tool
 from services.conversation_service import ConversationService
-
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 load_dotenv()
 
@@ -72,6 +73,10 @@ class MariaAssistant:
             ]
         )
 
+        now = datetime.now(
+            ZoneInfo("America/Mexico_City")
+        )
+
         # Agregar contexto del usuario al prompt
         conversation = ""
 
@@ -83,6 +88,10 @@ class MariaAssistant:
             )
 
         prompt = f"""
+        Fecha y hora actual del servidor:
+
+        {now.strftime("%Y-%m-%d %H:%M:%S %Z")}
+        
         Información del usuario
 
         Nombre: {user['name']}
