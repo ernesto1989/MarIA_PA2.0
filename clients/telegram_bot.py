@@ -17,7 +17,7 @@ import os
 
 from dotenv import load_dotenv
 from utils.logger import logger
-
+import whisper
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -31,6 +31,7 @@ from telegram.ext import (
 from agent.assistant import MariaAssistant
 from notifications.notifier import notify_admin_new_user,notify_user_approved,notify_user_denied
 from services.user_service import UserService
+from services.speech_service import SpeechService
 from clients import telegram_client
 from scheduler.scheduler import start_scheduler
 
@@ -39,6 +40,9 @@ from scheduler.scheduler import start_scheduler
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN") #el token para comunicarse con telegram. Se obtiene de BotFather en Telegram.
 assistant = MariaAssistant() #El agente MarIA.
+
+#Modelo whisper para converti voz a texto
+whisper_model = whisper.load_model("small")
 
 # Estados del registro
 ASK_NAME = 1
@@ -344,6 +348,23 @@ async def echo(update: Update,
         response
     )
 
+async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    telegram_user_id = update.effective_user.id
+    text = await SpeechService.process_voicemsg(update=update)
+
+    response = await assistant.process_message(
+        telegram_user_id,
+        text
+    )
+
+    #Aquí envía la respuesta de vuelta a Telegram.
+    await update.message.reply_text(
+        response
+    )
+    
+
+
 register_handler = ConversationHandler(
 
     entry_points=[
@@ -368,6 +389,8 @@ register_handler = ConversationHandler(
 
     fallbacks=[]
 )
+
+
 
 #Log de errores
 async def error_handler(update, context):
@@ -396,9 +419,10 @@ def main():
     app.add_handler(CommandHandler("help",help_command))
     app.add_handler(CommandHandler("approve",approve))
     app.add_handler(CommandHandler("deny",deny))
-    app.add_handler(register_handler)
+    app.add_handler(register_handler) #conversation handler
     #Handler que llama al método echo cuando el usuario envía un mensaje de texto que no es un comando.
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,echo))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
     app.add_error_handler(error_handler)
 
     logger.info("Arrancando scheduler...")
