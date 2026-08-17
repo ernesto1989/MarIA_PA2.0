@@ -296,8 +296,21 @@ class ReminderService:
                 AND r.enabled = TRUE
                 AND r.trigger_time <= CURTIME()
                 AND (
-                    r.last_sent_at IS NULL
-                    OR DATE(r.last_sent_at) < CURDATE()
+                    -- Reminder que ya ha sido enviado anteriormente
+                    (
+                        -- aqui es solo true si ya fue enviado (last_sent_at no es null) y fue enviado antes que hoy
+                        r.last_sent_at IS NOT NULL
+                        AND DATE(r.last_sent_at) < CURDATE()
+                    )
+                    OR
+                    -- Primer envío: solo si fue creado antes de la hora programada de hoy
+                    (
+                        -- es nuevo (no ha sido enviado) y la hora la que ha sido creado no ha pasado
+                        -- aquí, por ejemplo si lo creo a las 12 y se debe ejecutar a la una, apenas lo enviará
+                        -- si lo creo y ya pasó la hora diaria, ya no lo envia
+                        r.last_sent_at IS NULL
+                        AND r.created_at <= TIMESTAMP(CURDATE(), r.trigger_time)
+                    )
                 )
                 AND (
                         r.frequency = 'DAILY'
