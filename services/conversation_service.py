@@ -13,6 +13,7 @@ class ConversationService:
 
     _history = defaultdict(list)
 
+    #Método que busca la historia de conversación de un usuario.
     @classmethod
     def get_history(
         cls,
@@ -20,6 +21,7 @@ class ConversationService:
     ):
         return cls._history[telegram_user_id]
 
+    #Método que agrega un mensaje proveniente del usuario
     @classmethod
     def add_user_message(
         cls,
@@ -34,6 +36,7 @@ class ConversationService:
             telegram_user_id
         )
 
+    #Método que agrega un mensaje proveniente del agente
     @classmethod
     def add_assistant_message(
         cls,
@@ -48,6 +51,7 @@ class ConversationService:
             telegram_user_id
         )
 
+    #Método que borra el historial de mensajes
     @classmethod
     def clear_history(
         cls,
@@ -55,11 +59,14 @@ class ConversationService:
     ):
         cls._history[telegram_user_id] = []
 
+    #Método que determina el total de historial
     @classmethod
     def _trim(
         cls,
         telegram_user_id: int
     ):
+        #si el número de mensajes del usuario es mayor al total de mensajes
         if len(cls._history[telegram_user_id]) > cls.MAX_MESSAGES:
+            #se elimina el mensaje más viejo
             cls._history[telegram_user_id] = \
                 cls._history[telegram_user_id][-cls.MAX_MESSAGES:]
