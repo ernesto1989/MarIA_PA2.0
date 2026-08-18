@@ -20,7 +20,20 @@ from openai import AsyncOpenAI
 
 from services.user_service import UserService
 from .instructions import SYSTEM_PROMPT
-from .tools import build_find_tasks_tool,build_find_task_tool,build_add_task_tool,build_update_task_tool,build_cleanup_completed_tasks_tool,build_add_task_reminder_tool,build_add_one_shot_reminder_tool,build_add_recurring_reminder_tool
+from .tools import (
+    build_find_tasks_tool,
+    build_find_task_tool,
+    build_add_task_tool,
+    build_update_task_tool,
+    build_cleanup_completed_tasks_tool,
+    build_add_task_reminder_tool,
+    build_add_one_shot_reminder_tool,
+    build_add_recurring_reminder_tool, 
+    build_find_reminders_tool,
+    build_disable_reminder_tool,
+    build_update_reminder_tool,
+    build_delete_reminder_tool
+)
 from services.conversation_service import ConversationService
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -93,7 +106,11 @@ class MariaAssistant:
                 build_cleanup_completed_tasks_tool(user["id"]),
                 build_add_task_reminder_tool(user["id"]),
                 build_add_one_shot_reminder_tool(user["id"]),
-                build_add_recurring_reminder_tool(user["id"])
+                build_add_recurring_reminder_tool(user["id"]),
+                build_find_reminders_tool(user["id"]),
+                build_disable_reminder_tool(user["id"]),
+                build_update_reminder_tool(user["id"]),
+                build_delete_reminder_tool(user["id"])
             ]
         )
 

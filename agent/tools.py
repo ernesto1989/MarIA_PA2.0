@@ -222,3 +222,173 @@ def build_add_recurring_reminder_tool(user_id: int):
         return "Recordatorio recurrente creado correctamente."
 
     return add_recurring_reminder
+
+
+def build_find_reminders_tool(user_id: int):
+
+    @function_tool
+    def find_reminders() -> str:
+        """
+        Obtiene todos los recordatorios del usuario.
+        Incluye recordatorios activos y deshabilitados.
+        """
+
+        logger.info("TOOL find_reminders(...)")
+
+        reminders = ReminderService.find_user_reminders(user_id)
+
+        if not reminders:
+            return "No tienes recordatorios."
+
+        return reminders
+
+    return find_reminders
+
+def build_disable_reminder_tool(user_id: int):
+
+    @function_tool
+    def disable_reminder(
+        reminder_id: int
+    ) -> str:
+        """
+        Deshabilita un recordatorio existente.
+
+        Utilízalo cuando el usuario quiera dejar de recibir
+        un recordatorio sin eliminarlo.
+        """
+
+        logger.info(
+            f"TOOL disable_reminder({reminder_id})"
+        )
+
+        reminders = ReminderService.find_user_reminders(user_id)
+
+        reminder = next(
+            (
+                r for r in reminders
+                if r["id"] == reminder_id
+            ),
+            None
+        )
+
+        if reminder is None:
+            return "No encontré ese recordatorio."
+
+        ReminderService.disable_reminder(
+            reminder_id
+        )
+
+        return "Recordatorio deshabilitado correctamente."
+
+    return disable_reminder
+
+
+def build_update_reminder_tool(user_id: int):
+
+    @function_tool
+    def update_reminder(
+        reminder_id: int,
+        title: str = None,
+        trigger_date: str = None,
+        trigger_time: str = None,
+        frequency: str = None,
+        day_of_month: int = None,
+        month_of_year: int = None,
+        enabled: bool = None
+    ) -> str:
+        """
+        Actualiza un recordatorio existente.
+
+        Solo modifica los campos proporcionados.
+
+        trigger_date debe usar YYYY-MM-DD.
+        trigger_time debe usar HH:MM.
+
+        frequency puede ser:
+        DAILY
+        WEEKLY
+        MONTHLY
+        YEARLY
+        """
+
+        logger.info(
+            f"TOOL update_reminder({reminder_id})"
+        )
+
+        reminders = ReminderService.find_user_reminders(user_id)
+
+        reminder = next(
+            (
+                r for r in reminders
+                if r["id"] == reminder_id
+            ),
+            None
+        )
+
+        if reminder is None:
+            return "No encontré ese recordatorio."
+
+        if trigger_date is not None:
+            trigger_date = datetime.strptime(
+                trigger_date,
+                "%Y-%m-%d"
+            ).date()
+
+        if trigger_time is not None:
+            trigger_time = datetime.strptime(
+                trigger_time,
+                "%H:%M"
+            ).time()
+
+        ReminderService.update_reminder(
+            reminder_id=reminder_id,
+            title=title,
+            trigger_date=trigger_date,
+            trigger_time=trigger_time,
+            frequency=frequency,
+            day_of_month=day_of_month,
+            month_of_year=month_of_year,
+            enabled=enabled
+        )
+
+        return "Recordatorio actualizado correctamente."
+
+    return update_reminder
+
+def build_delete_reminder_tool(user_id: int):
+
+    @function_tool
+    def delete_reminder(
+        reminder_id: int
+    ) -> str:
+        """
+        Elimina permanentemente un recordatorio.
+
+        Utilízalo únicamente cuando el usuario quiera
+        eliminarlo, no cuando solamente quiera desactivarlo.
+        """
+
+        logger.info(
+            f"TOOL delete_reminder({reminder_id})"
+        )
+
+        reminders = ReminderService.find_user_reminders(user_id)
+
+        reminder = next(
+            (
+                r for r in reminders
+                if r["id"] == reminder_id
+            ),
+            None
+        )
+
+        if reminder is None:
+            return "No encontré ese recordatorio."
+
+        ReminderService.delete_reminder(
+            reminder_id
+        )
+
+        return "Recordatorio eliminado correctamente."
+
+    return delete_reminder

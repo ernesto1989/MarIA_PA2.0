@@ -146,11 +146,10 @@ class ReminderService:
                     r.*
                 FROM reminders r
                 WHERE r.user_id = %s
-                AND r.enabled = TRUE
                 ORDER BY
                     r.reminder_type,
                     r.frequency,
-                    r.remind_time
+                    r.trigger_time
                 """,
                 (user_id,)
             )
@@ -173,7 +172,7 @@ class ReminderService:
                         for row in cursor.fetchall()
                     ]
             return reminders
-        except Exception:
+        except Exception as e:
             logger.exception(
                 f"Error obteniendo reminders del usuario {user_id}."
             )
@@ -556,9 +555,12 @@ class ReminderService:
             if conn: conn.close()
 
     @staticmethod
-    def disable_reminder(reminder_id: int):
+    def disable_reminder(
+        reminder_id: int
+    ):
         conn = None
         cursor = None
+
         try:
             conn = get_connection()
             conn.start_transaction()
@@ -567,9 +569,7 @@ class ReminderService:
             cursor.execute(
                 """
                 UPDATE reminders
-                SET
-                    enabled = FALSE,
-                    last_sent_at = NOW()
+                SET enabled = FALSE
                 WHERE id = %s
                 """,
                 (reminder_id,)
@@ -577,16 +577,24 @@ class ReminderService:
 
             conn.commit()
 
+            logger.info(
+                f"Reminder {reminder_id} deshabilitado."
+            )
+
         except Exception:
-            if conn: conn.rollback()
+            if conn:
+                conn.rollback()
+
             logger.exception(
                 f"Error deshabilitando reminder {reminder_id}."
             )
             raise
 
         finally:
-            if cursor: cursor.close()
-            if conn: conn.close()
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
     @staticmethod
     def update_reminder(
