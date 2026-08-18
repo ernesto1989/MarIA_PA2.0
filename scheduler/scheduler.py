@@ -15,8 +15,13 @@ from zoneinfo import ZoneInfo
 from .jobs import daily_tasks_job, week_tasks_job, month_tasks_job,clean_tasks_job,process_reminders_job
 from utils.logger import logger
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 scheduler = BackgroundScheduler(
-    timezone=ZoneInfo("America/Mexico_City")
+    timezone=ZoneInfo(os.environ.get("TIMEZONE"))
 )
 
 

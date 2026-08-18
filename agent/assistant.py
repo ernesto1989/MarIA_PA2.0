@@ -114,9 +114,11 @@ class MariaAssistant:
             ]
         )
 
+        #os.getenv("TIMEZONE") <- Trae el dato del server
+
         #Define el timezone para mejor manejo de las OPS
         now = datetime.now(
-            ZoneInfo("America/Mexico_City") #migrar a .env
+            ZoneInfo(os.environ.get("TIMEZONE")) #migrar a .env
         )
 
         # Agregar contexto del usuario al prompt
