@@ -59,9 +59,11 @@ def build_add_task_tool(user_id):
         LOW
         MEDIUM
         URGENT
-        """
 
-        task_id = ActivityService.add_task(
+        Si existe otra actividad del usuario en la misma
+        fecha y hora, no la crea y devuelve el conflicto.
+        """
+        result = ActivityService.add_task(
             user_id,
             title,
             due_date,
@@ -69,8 +71,20 @@ def build_add_task_tool(user_id):
             priority
         )
 
-        return f"Actividad creada correctamente. Id={task_id}"
-    
+        if not result["created"]:
+            conflicts = result["conflicts"]
+            return {
+                "success": False,
+                "message": "Existe una actividad en la misma fecha y hora.",
+                "conflicts": conflicts
+            }
+
+        return {
+            "success": True,
+            "message": "Actividad creada correctamente.",
+            "task_id": result["task_id"]
+        }
+
     return add_task
 
 
@@ -87,17 +101,27 @@ def build_update_task_tool(user_id):
     ):
         """
         Actualiza una actividad existente.
+
+        Si se modifica la fecha u hora y existe otra actividad
+        en ese mismo momento, no realiza la actualización
+        y devuelve el conflicto.
         """
 
         task = ActivityService.find_task(task_id)
 
         if task is None:
-            return "Actividad no encontrada."
+            return {
+                "success": False,
+                "message": "Actividad no encontrada."
+            }
 
         if task["user_id"] != user_id:
-            return "La actividad no pertenece al usuario."
+            return {
+                "success": False,
+                "message": "La actividad no pertenece al usuario."
+            }
 
-        updated = ActivityService.update_task(
+        result = ActivityService.update_task(
             task_id,
             title,
             due_date,
@@ -106,7 +130,25 @@ def build_update_task_tool(user_id):
             status
         )
 
-        return "Actividad actualizada." if updated else "No hubo cambios."
+        if not result["updated"]:
+
+            if result.get("error") == "NO_CHANGES":
+                return {
+                    "success": False,
+                    "message": "No se proporcionaron cambios."
+                }
+
+            return {
+                "success": False,
+                "message": "La actividad no pudo actualizarse.",
+                "conflicts": result.get("conflicts", [])
+            }
+
+        return {
+            "success": True,
+            "message": "Actividad actualizada correctamente.",
+            "task_id": task_id
+        }
 
     return update_task
 

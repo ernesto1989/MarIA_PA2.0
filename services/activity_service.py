@@ -186,16 +186,98 @@ class ActivityService:
             logger.exception(f"Error buscando tareas mes user_id={user_id}")
             raise
 
-    #Agrega actividades del usuario
+
     @staticmethod
-    def add_task(user_id,
-                 title,
-                 due_date,
-                 due_time,
-                 priority):
+    def find_task_conflicts(
+        user_id: int,
+        due_date: str,
+        due_time: str,
+        exclude_task_id: int = None
+    ):
         conn = None
         cursor = None
+
         try:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            query = """
+                SELECT
+                    id,
+                    title,
+                    due_date,
+                    due_time,
+                    priority,
+                    status
+                FROM activities
+                WHERE user_id = %s
+                AND due_date = %s
+                AND due_time = %s
+            """
+
+            params = [
+                user_id,
+                due_date,
+                due_time
+            ]
+
+            if exclude_task_id is not None:
+                query += """
+                    AND id <> %s
+                """
+                params.append(exclude_task_id)
+
+            query += """
+                ORDER BY due_time
+            """
+
+            cursor.execute(query, params)
+
+            return cursor.fetchall()
+
+        except Exception:
+            logger.exception(
+                f"Error buscando conflictos para usuario {user_id}."
+            )
+            raise
+
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+
+    # Agrega actividades del usuario
+    @staticmethod
+    def add_task(
+        user_id,
+        title,
+        due_date,
+        due_time,
+        priority
+    ):
+        conn = None
+        cursor = None
+
+        try:
+            # Validar conflictos antes de crear
+            conflicts = ActivityService.find_task_conflicts(
+                user_id=user_id,
+                due_date=due_date,
+                due_time=due_time
+            )
+
+            if conflicts:
+                logger.info(
+                    f"Conflicto detectado al crear tarea "
+                    f"user_id={user_id}, fecha={due_date}, hora={due_time}"
+                )
+
+                return {
+                    "created": False,
+                    "conflicts": conflicts
+                }
+
             conn = get_connection()
             conn.start_transaction()
 
@@ -230,30 +312,93 @@ class ActivityService:
 
             conn.commit()
 
-            logger.info(f"Alta de tarea para user_id={user_id}")
-            return task_id
+            logger.info(
+                f"Alta de tarea para user_id={user_id}"
+            )
+
+            return {
+                "created": True,
+                "task_id": task_id
+            }
+
         except Exception:
-            if conn: conn.rollback()
-            logger.exception(f"Error agregando tarea user_id={user_id} title={title}")
+            if conn:
+                conn.rollback()
+
+            logger.exception(
+                f"Error agregando tarea "
+                f"user_id={user_id} title={title}"
+            )
             raise
+
         finally:
-            if cursor: cursor.close()
-            if conn: conn.close()
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
 
-    #Actualiza una actividad
+    # Actualiza una actividad
     @staticmethod
-    def update_task(task_id,
-                    title=None,
-                    due_date=None,
-                    due_time=None,
-                    priority=None,
-                    status=None):
+    def update_task(
+        task_id,
+        title=None,
+        due_date=None,
+        due_time=None,
+        priority=None,
+        status=None
+    ):
         conn = None
         cursor = None
+
         try:
+            # Obtener actividad actual
+            current_task = ActivityService.find_task(task_id)
+
+            if current_task is None:
+                return {
+                    "updated": False,
+                    "error": "NOT_FOUND"
+                }
+
+            # Determinar fecha y hora finales
+            final_due_date = (
+                due_date
+                if due_date is not None
+                else current_task["due_date"]
+            )
+
+            final_due_time = (
+                due_time
+                if due_time is not None
+                else current_task["due_time"]
+            )
+
+            # Validar conflictos solamente si cambia
+            # la fecha o la hora
+            if due_date is not None or due_time is not None:
+
+                conflicts = ActivityService.find_task_conflicts(
+                    user_id=current_task["user_id"],
+                    due_date=final_due_date,
+                    due_time=final_due_time,
+                    exclude_task_id=task_id
+                )
+
+                if conflicts:
+                    logger.info(
+                        f"Conflicto detectado al actualizar "
+                        f"tarea {task_id}"
+                    )
+
+                    return {
+                        "updated": False,
+                        "conflicts": conflicts
+                    }
+
             conn = get_connection()
             conn.start_transaction()
+
             cursor = conn.cursor(dictionary=True)
 
             updates = []
@@ -279,8 +424,12 @@ class ActivityService:
                 updates.append("status=%s")
                 values.append(status)
 
+            # No se proporcionaron cambios
             if len(updates) == 0:
-                return False
+                return {
+                    "updated": False,
+                    "error": "NO_CHANGES"
+                }
 
             values.append(task_id)
 
@@ -296,18 +445,32 @@ class ActivityService:
 
             updated = cursor.rowcount > 0
 
-            cursor.close()
-            conn.close()
-            logger.info(f"Actualización de tarea {task_id}")
-            return updated
+            logger.info(
+                f"Actualización de tarea {task_id}"
+            )
+
+            return {
+                "updated": updated,
+                "task_id": task_id
+            }
+
         except Exception:
-            if conn: conn.rollback()
-            logger.exception(f"Error actualizando tarea id={task_id} title={title} status={status}")
+            if conn:
+                conn.rollback()
+
+            logger.exception(
+                f"Error actualizando tarea id={task_id}"
+            )
             raise
+
         finally:
-            if cursor: cursor.close()
-            if conn: conn.close()
-        
+            if cursor:
+                cursor.close()
+
+            if conn:
+                conn.close()
+
+
     #Elimina todas las actividades completadas
     @staticmethod
     def cleanup_completed_tasks():
