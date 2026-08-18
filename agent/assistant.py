@@ -9,13 +9,16 @@ El agente contiene los tools necesarios para realizar las acciones a las cuales 
 import os
 from dotenv import load_dotenv
 
-from agents import (
-    Agent,
-    Runner,
-    OpenAIChatCompletionsModel,
-    set_tracing_disabled
-)
-from openai import AsyncOpenAI
+from agents import Agent
+from agents import Runner
+
+# from agents import (
+#     Agent,
+#     Runner,
+#     OpenAIChatCompletionsModel,
+#     set_tracing_disabled
+# )
+# from openai import AsyncOpenAI
 
 
 from services.user_service import UserService
@@ -40,17 +43,17 @@ from zoneinfo import ZoneInfo
 
 load_dotenv()
 
-set_tracing_disabled(True)
+# set_tracing_disabled(True)
 
-gemini_client = AsyncOpenAI(
-    api_key=os.getenv("GEMINI_API_KEY"),
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-)
+# gemini_client = AsyncOpenAI(
+#     api_key=os.getenv("GEMINI_API_KEY"),
+#     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+# )
 
-gemini_model = OpenAIChatCompletionsModel(
-    model=os.getenv("MODEL"),
-    openai_client=gemini_client
-)
+# gemini_model = OpenAIChatCompletionsModel(
+#     model=os.getenv("MODEL"),
+#     openai_client=gemini_client
+# )
 
 
 
@@ -97,7 +100,7 @@ class MariaAssistant:
         agent = Agent(
             name="MarIA",
             instructions=SYSTEM_PROMPT,
-            model=gemini_model,
+            model=os.getenv("MODEL"),
             tools=[
                 build_find_tasks_tool(user["id"]),
                 build_find_task_tool(user["id"]),
