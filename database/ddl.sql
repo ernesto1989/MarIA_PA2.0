@@ -48,8 +48,8 @@ DELIMITER $$
 
 CREATE PROCEDURE sp_cleanup_completed_tasks()
 BEGIN
-    DELETE FROM activities
-    WHERE status = 'DONE';
+    DELETE FROM tasks
+    WHERE status = 'DONE' OR status = 'CANCELLED';
 END$$
 
 DELIMITER ;
@@ -158,3 +158,21 @@ CREATE TABLE reminder_weekdays (
         ON DELETE CASCADE
 
 );
+
+RENAME TABLE maria_pa.activities TO maria_pa.tasks;
+
+ALTER TABLE maria_pa.tasks ADD end_time time DEFAULT NULL NULL;
+ALTER TABLE maria_pa.tasks CHANGE end_time end_time time DEFAULT NULL NULL AFTER due_time;
+ALTER TABLE maria_pa.tasks
+
+
+MODIFY COLUMN status ENUM(
+    'PENDING',
+    'IN_PROGRESS',
+    'DONE',
+    'CANCELLED'
+) NOT NULL DEFAULT 'PENDING';
+
+ALTER TABLE maria_pa.tasks ADD end_date date NULL;
+ALTER TABLE maria_pa.tasks CHANGE end_date end_date date NULL AFTER due_time;
+ALTER TABLE maria_pa.tasks CHANGE status status enum('PENDING','IN_PROGRESS','DONE','CANCELLED') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT 'PENDING' NOT NULL AFTER priority;

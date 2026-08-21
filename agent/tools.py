@@ -1,9 +1,9 @@
 '''
- Este archivo contiene herramientas para interactuar con las actividades del usuario.
+ Este archivo contiene herramientas para interactuar con las es del usuario.
  Crea funciones que le dan funciones al agente.
 '''
 from agents import function_tool
-from services.activity_service import ActivityService
+from services.tasks_service import TasksService
 from services.reminder_service import ReminderService
 from datetime import datetime
 from utils.logger import logger
@@ -11,12 +11,19 @@ from utils.logger import logger
 def build_find_tasks_tool(user_id):
 
     @function_tool
-    def find_tasks():
+    def find_tasks(
+        status: str | None = "IN_PROGRESS",
+        due_date: str | None = None,
+        due_before: str | None = None,
+        due_after: str | None = None,
+        priority: str | None = None,
+        limit: int | None = None
+    ):
         """
-        Obtiene todas las actividades del usuario.
+        Obtiene todas las tareas del usuario.
         """
 
-        tasks = ActivityService.find_tasks(user_id)
+        tasks = TasksService.find_tasks(user_id,status,priority,due_date,due_before,due_after,limit)
 
         return tasks
 
@@ -27,17 +34,17 @@ def build_find_task_tool(user_id):
     @function_tool
     def find_task(task_id: int):
         """
-        Obtiene una actividad específica del usuario mediante su ID.
-        Utilízala cuando el usuario haga referencia a una actividad concreta.
+        Obtiene una tarea específica del usuario mediante su ID.
+        Utilízala cuando el usuario haga referencia a una  concreta.
         """
 
-        task = ActivityService.find_task(task_id)
+        task = TasksService.find_task(task_id)
 
         if task is None:
-            return "Actividad no encontrada."
+            return "Tarea no encontrada."
 
         if task["user_id"] != user_id:
-            return "La actividad no pertenece al usuario."
+            return "La tarea no pertenece al usuario."
 
         return task
 
@@ -50,24 +57,28 @@ def build_add_task_tool(user_id):
         title: str,
         due_date: str,
         due_time: str,
+        end_date: str,
+        end_time: str,
         priority: str
     ):
         """
-        Crea una nueva actividad.
+        Crea una nueva tarea.
 
         priority debe ser:
         LOW
         MEDIUM
         URGENT
 
-        Si existe otra actividad del usuario en la misma
+        Si existe otra  del usuario en la misma
         fecha y hora, no la crea y devuelve el conflicto.
         """
-        result = ActivityService.add_task(
+        result = TasksService.add_task(
             user_id,
             title,
             due_date,
             due_time,
+            end_date,
+            end_time,
             priority
         )
 
@@ -75,13 +86,13 @@ def build_add_task_tool(user_id):
             conflicts = result["conflicts"]
             return {
                 "success": False,
-                "message": "Existe una actividad en la misma fecha y hora.",
+                "message": "Existe una tarea en la misma fecha y hora.",
                 "conflicts": conflicts
             }
 
         return {
             "success": True,
-            "message": "Actividad creada correctamente.",
+            "message": "Tarea creada correctamente.",
             "task_id": result["task_id"]
         }
 
@@ -96,36 +107,40 @@ def build_update_task_tool(user_id):
         title: str = None,
         due_date: str = None,
         due_time: str = None,
+        end_date: str = None,
+        end_time: str = None,
         priority: str = None,
         status: str = None
     ):
         """
-        Actualiza una actividad existente.
+        Actualiza una tarea existente.
 
-        Si se modifica la fecha u hora y existe otra actividad
+        Si se modifica la fecha u hora y existe otra 
         en ese mismo momento, no realiza la actualización
         y devuelve el conflicto.
         """
 
-        task = ActivityService.find_task(task_id)
+        task = TasksService.find_task(task_id)
 
         if task is None:
             return {
                 "success": False,
-                "message": "Actividad no encontrada."
+                "message": "Tarea no encontrada."
             }
 
         if task["user_id"] != user_id:
             return {
                 "success": False,
-                "message": "La actividad no pertenece al usuario."
+                "message": "La tarea no pertenece al usuario."
             }
 
-        result = ActivityService.update_task(
+        result = TasksService.update_task(
             task_id,
             title,
             due_date,
             due_time,
+            end_date,
+            end_time,
             priority,
             status
         )
@@ -140,13 +155,13 @@ def build_update_task_tool(user_id):
 
             return {
                 "success": False,
-                "message": "La actividad no pudo actualizarse.",
+                "message": "La tarea no pudo actualizarse.",
                 "conflicts": result.get("conflicts", [])
             }
 
         return {
             "success": True,
-            "message": "Actividad actualizada correctamente.",
+            "message": "Tarea actualizada correctamente.",
             "task_id": task_id
         }
 
@@ -158,14 +173,14 @@ def build_cleanup_completed_tasks_tool(user_id):
     @function_tool
     def cleanup_completed_tasks():
         """
-        Elimina todas las actividades terminadas del usuario.
+        Elimina todas las tareas terminadas del usuario.
         """
 
-        ActivityService.cleanup_completed_tasks(
+        TasksService.cleanup_completed_tasks(
             user_id
         )
 
-        return "Las actividades terminadas fueron eliminadas."
+        return "Las tareas terminadas fueron eliminadas."
 
     return cleanup_completed_tasks
 

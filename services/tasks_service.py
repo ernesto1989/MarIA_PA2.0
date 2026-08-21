@@ -20,9 +20,10 @@ Se incluye:
 
 '''
 from database.connection import get_connection
+from reminder_service import ReminderService
 from utils.logger import logger
 
-class ActivityService:
+class TasksService:
 
     #Busca una actividad por id
     @staticmethod
@@ -33,7 +34,7 @@ class ActivityService:
 
             cursor.execute("""
                 SELECT *
-                FROM activities
+                FROM tasks
                 WHERE id=%s
             """, (task_id,))
 
@@ -64,7 +65,7 @@ class ActivityService:
 
             sql = """
                 SELECT *
-                FROM activities
+                FROM tasks
                 WHERE user_id=%s
             """
 
@@ -117,8 +118,9 @@ class ActivityService:
 
             cursor.execute("""
                 SELECT *
-                FROM activities
+                FROM tasks
                 WHERE user_id=%s AND due_date = CURDATE()
+                AND status != 'CANCELLED'
                 ORDER BY
                     priority DESC,
                     status,
@@ -143,7 +145,7 @@ class ActivityService:
 
             cursor.execute("""
                 SELECT *
-                FROM activities
+                FROM tasks
                 WHERE user_id = %s
                 AND status = 'IN_PROGRESS'
                 AND due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 6 DAY)
@@ -168,7 +170,7 @@ class ActivityService:
 
             cursor.execute("""
                 SELECT *
-                FROM activities
+                FROM activtasksities
                 WHERE user_id = %s
                 AND status = 'IN_PROGRESS'
                 AND due_date BETWEEN CURDATE()
@@ -192,6 +194,8 @@ class ActivityService:
         user_id: int,
         due_date: str,
         due_time: str,
+        end_date: str = None,
+        end_time: str = None,
         exclude_task_id: int = None
     ):
         conn = None
@@ -207,18 +211,135 @@ class ActivityService:
                     title,
                     due_date,
                     due_time,
+                    end_date,
+                    end_time,
                     priority,
                     status
-                FROM activities
+                FROM tasks
                 WHERE user_id = %s
-                AND due_date = %s
-                AND due_time = %s
+                AND status <> 'CANCELLED'
+
+                AND
+                (
+                    /*
+                    * NUEVA TAREA SIN FIN
+                    * --------------------------------
+                    * Es un punto en el tiempo.
+                    *
+                    * Hay conflicto si:
+                    * 1. Otra tarea empieza exactamente ahí
+                    * 2. El punto cae dentro de un intervalo existente
+                    */
+                    (
+                        %s IS NULL
+                        AND %s IS NULL
+
+                        AND
+                        (
+                            TIMESTAMP(due_date, due_time)
+                                = TIMESTAMP(%s, %s)
+
+                            OR
+
+                            (
+                                end_date IS NOT NULL
+                                AND end_time IS NOT NULL
+
+                                AND TIMESTAMP(%s, %s)
+                                    >= TIMESTAMP(due_date, due_time)
+
+                                AND TIMESTAMP(%s, %s)
+                                    < TIMESTAMP(end_date, end_time)
+                            )
+                        )
+                    )
+
+                    OR
+
+                    /*
+                    * NUEVA TAREA CON FIN
+                    * --------------------------------
+                    * Es un intervalo.
+                    *
+                    * Hay conflicto si:
+                    *
+                    *   nueva_inicio < existente_fin
+                    *   AND
+                    *   nueva_fin > existente_inicio
+                    *
+                    * O si la tarea existente es solamente
+                    * un punto y cae dentro del intervalo nuevo.
+                    */
+                    (
+                        %s IS NOT NULL
+                        AND %s IS NOT NULL
+
+                        AND
+                        (
+                            /*
+                            * Existente sin fin = punto
+                            */
+                            (
+                                end_date IS NULL
+                                AND end_time IS NULL
+
+                                AND TIMESTAMP(due_date, due_time)
+                                    >= TIMESTAMP(%s, %s)
+
+                                AND TIMESTAMP(due_date, due_time)
+                                    < TIMESTAMP(%s, %s)
+                            )
+
+                            OR
+
+                            /*
+                            * Existente también es intervalo
+                            */
+                            (
+                                end_date IS NOT NULL
+                                AND end_time IS NOT NULL
+
+                                AND TIMESTAMP(%s, %s)
+                                    < TIMESTAMP(end_date, end_time)
+
+                                AND TIMESTAMP(%s, %s)
+                                    > TIMESTAMP(due_date, due_time)
+                            )
+                        )
+                    )
+                )
             """
 
             params = [
                 user_id,
+
+                # Nueva tarea SIN fin
+                end_date,
+                end_time,
                 due_date,
-                due_time
+                due_time,
+
+                # Punto nuevo dentro de intervalo existente
+                due_date,
+                due_time,
+                due_date,
+                due_time,
+
+                # Nueva tarea CON fin
+                end_date,
+                end_time,
+
+                # Existente sin fin
+                due_date,
+                due_time,
+                end_date,
+                end_time,
+
+                # Ambas son intervalos
+                due_date,
+                due_time,
+                end_date,
+                end_time
             ]
 
             if exclude_task_id is not None:
@@ -228,10 +349,10 @@ class ActivityService:
                 params.append(exclude_task_id)
 
             query += """
-                ORDER BY due_time
+                ORDER BY due_date, due_time
             """
 
-            cursor.execute(query, params)
+            cursor.execute(query, tuple(params))
 
             return cursor.fetchall()
 
@@ -244,6 +365,7 @@ class ActivityService:
         finally:
             if cursor:
                 cursor.close()
+
             if conn:
                 conn.close()
 
@@ -254,6 +376,8 @@ class ActivityService:
         title,
         due_date,
         due_time,
+        end_date,
+        end_time,
         priority
     ):
         conn = None
@@ -261,10 +385,12 @@ class ActivityService:
 
         try:
             # Validar conflictos antes de crear
-            conflicts = ActivityService.find_task_conflicts(
+            conflicts = TasksService.find_task_conflicts(
                 user_id=user_id,
                 due_date=due_date,
-                due_time=due_time
+                due_time=due_time,
+                end_date=end_date,
+                end_time=end_time
             )
 
             if conflicts:
@@ -284,16 +410,20 @@ class ActivityService:
             cursor = conn.cursor(dictionary=True)
 
             cursor.execute("""
-                INSERT INTO activities
+                INSERT INTO tasks
                 (
                     user_id,
                     title,
                     due_date,
                     due_time,
+                    end_date,
+                    end_time,
                     priority
                 )
                 VALUES
                 (
+                    %s,
+                    %s,
                     %s,
                     %s,
                     %s,
@@ -305,6 +435,8 @@ class ActivityService:
                 title,
                 due_date,
                 due_time,
+                end_date,
+                end_time,
                 priority
             ))
 
@@ -345,6 +477,8 @@ class ActivityService:
         title=None,
         due_date=None,
         due_time=None,
+        end_date=None,
+        end_time=None,
         priority=None,
         status=None
     ):
@@ -353,7 +487,7 @@ class ActivityService:
 
         try:
             # Obtener actividad actual
-            current_task = ActivityService.find_task(task_id)
+            current_task = TasksService.find_task(task_id)
 
             if current_task is None:
                 return {
@@ -378,10 +512,12 @@ class ActivityService:
             # la fecha o la hora
             if due_date is not None or due_time is not None:
 
-                conflicts = ActivityService.find_task_conflicts(
+                conflicts = TasksService.find_task_conflicts(
                     user_id=current_task["user_id"],
                     due_date=final_due_date,
                     due_time=final_due_time,
+                    end_date=end_date,
+                    end_time=end_time,
                     exclude_task_id=task_id
                 )
 
@@ -416,6 +552,14 @@ class ActivityService:
                 updates.append("due_time=%s")
                 values.append(due_time)
 
+            if end_date is not None:
+                updates.append("end_date=%s")
+                values.append(end_date)
+
+            if end_time is not None:
+                updates.append("end_time=%s")
+                values.append(end_time)
+
             if priority is not None:
                 updates.append("priority=%s")
                 values.append(priority)
@@ -434,16 +578,30 @@ class ActivityService:
             values.append(task_id)
 
             sql = f"""
-                UPDATE activities
+                UPDATE tasks
                 SET {', '.join(updates)}
                 WHERE id=%s
             """
 
             cursor.execute(sql, tuple(values))
 
-            conn.commit()
-
             updated = cursor.rowcount > 0
+
+            if status == 'CANCELLED':
+                cursor.execute(
+                    """
+                    DELETE FROM reminders
+                    WHERE activity_id = %s
+                    """,
+                    (task_id,)
+                )
+                deleted = cursor.rowcount
+
+                logger.info(
+                    f"Reminders eliminados para task_id={task_id}: {deleted}"
+                )
+    
+            conn.commit()
 
             logger.info(
                 f"Actualización de tarea {task_id}"
@@ -451,6 +609,7 @@ class ActivityService:
 
             return {
                 "updated": updated,
+                "deleted": deleted,
                 "task_id": task_id
             }
 

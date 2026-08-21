@@ -13,7 +13,7 @@ Se incluyen:
 """
 
 from services.user_service import UserService
-from services.activity_service import ActivityService
+from services.tasks_service import TasksService
 from database.connection import get_connection
 from datetime import datetime, date, time, timedelta
 from utils.logger import logger
@@ -41,7 +41,7 @@ class ReminderService:
 
             for user in users:
 
-                tasks = ActivityService.find_tasks_for_today(
+                tasks = TasksService.find_tasks_for_today(
                     user["id"]
                 )
 
@@ -77,7 +77,7 @@ class ReminderService:
 
             for user in users:
 
-                tasks = ActivityService.find_tasks_for_this_week(
+                tasks = TasksService.find_tasks_for_this_week(
                     user["id"]
                 )
 
@@ -102,7 +102,7 @@ class ReminderService:
 
             for user in users:
 
-                tasks = ActivityService.find_tasks_for_this_month(
+                tasks = TasksService.find_tasks_for_this_month(
                     user["id"]
                 )
 
@@ -122,7 +122,7 @@ class ReminderService:
     @staticmethod
     async def clean_tasks():
         try:
-            ActivityService.cleanup_completed_tasks()
+            TasksService.cleanup_completed_tasks()
             await notify_clean_tasks()
         except Exception:
             logger.exception("Error ejecutando limpieza de tareas completadas")
@@ -205,7 +205,7 @@ class ReminderService:
 
                 FROM reminders r
 
-                INNER JOIN activities a
+                INNER JOIN tasks a
                     ON a.id = r.activity_id
 
                 INNER JOIN users u
@@ -710,7 +710,6 @@ class ReminderService:
         finally:
             if cursor: cursor.close()
             if conn: conn.close()
-
     
     @staticmethod
     async def process_reminders():
