@@ -16,6 +16,8 @@ from services.user_service import UserService
 from services.tasks_service import TasksService
 from database.connection import get_connection
 from datetime import datetime, date, time, timedelta
+from zoneinfo import ZoneInfo
+import os
 from utils.logger import logger
 
 from notifications.notifier import (
@@ -30,6 +32,35 @@ from notifications.notifier import (
 
 
 class ReminderService:
+
+    @staticmethod
+    def _parse_date(value):
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        return datetime.strptime(str(value), "%Y-%m-%d").date()
+
+    @staticmethod
+    def _parse_time(value):
+        if isinstance(value, datetime):
+            return value.time()
+        if isinstance(value, time):
+            return value
+        value = str(value)
+        for fmt in ("%H:%M:%S", "%H:%M"):
+            try:
+                return datetime.strptime(value, fmt).time()
+            except ValueError:
+                continue
+        raise ValueError(f"Formato de hora inválido: {value}")
+
+    @staticmethod
+    def _combine_local_datetime(date_value, time_value):
+        return datetime.combine(
+            ReminderService._parse_date(date_value),
+            ReminderService._parse_time(time_value)
+        ).replace(tzinfo=ZoneInfo(os.environ["TIMEZONE"]))
 
     #Método que automatiza la búsqueda de todos las tareas de ese día de todos los usuarios. Es consumido por el job de 
     #recordatorios diarios.
@@ -55,7 +86,7 @@ class ReminderService:
 
                 completed_tasks = [
                     t for t in tasks
-                    if t["status"] == "COMPLETED"
+                    if t["status"] == "DONE"
                 ]
 
                 await notify_daily_tasks(
@@ -146,10 +177,11 @@ class ReminderService:
                     r.*
                 FROM reminders r
                 WHERE r.user_id = %s
+                AND r.enabled = TRUE
                 ORDER BY
                     r.reminder_type,
                     r.frequency,
-                    r.trigger_time
+                    r.remind_time
                 """,
                 (user_id,)
             )
@@ -172,7 +204,7 @@ class ReminderService:
                         for row in cursor.fetchall()
                     ]
             return reminders
-        except Exception as e:
+        except Exception:
             logger.exception(
                 f"Error obteniendo reminders del usuario {user_id}."
             )
@@ -347,126 +379,102 @@ class ReminderService:
 
     @staticmethod
     def add_task_reminder(
-        user_id: int,
-        activity_id: int,
-        remind_before_minutes: int
+        user_id: int, activity_id: int, remind_before_minutes: int
     ) -> int:
-        conn = None
-        cursor = None      
-        try:
-            conn = get_connection()
-            conn.start_transaction()
-            cursor = conn.cursor()
+        task = TasksService.find_task(activity_id)
 
-            cursor.execute(
-                """
-                INSERT INTO reminders
-                (
-                    user_id,
-                    activity_id,
-                    reminder_type,
-                    trigger_time,
-                    remind_before_minutes
-                )
-                VALUES
-                (
-                    %s,
-                    %s,
-                    'TASK',
-                    '00:00:00', 
-                    %s
-                )
-                """,
-                (
-                    user_id,
-                    activity_id,
-                    remind_before_minutes
-                )
-            )
+        if task is None:
+            raise ValueError(f"La tarea {activity_id} no existe.")
+        if task["user_id"] != user_id:
+            raise ValueError(f"La tarea {activity_id} no pertenece al usuario.")
+        if task["status"] == "CANCELLED":
+            raise ValueError("No se puede crear un reminder para una tarea cancelada.")
+        if remind_before_minutes <= 0:
+            raise ValueError("remind_before_minutes debe ser mayor que cero.")
 
-            reminder_id = cursor.lastrowid
-            conn.commit()
-            logger.info(
-                f"Reminder TASK {reminder_id} creado para activity {activity_id}."
-            )
-            return reminder_id
+        task_datetime = ReminderService._combine_local_datetime(
+            task["due_date"], task["due_time"]
+        )
+        now = datetime.now(ZoneInfo(os.environ["TIMEZONE"]))
+        reminder_datetime = task_datetime - timedelta(minutes=remind_before_minutes)
 
-        except Exception:
-            if conn: conn.rollback()
-            logger.exception(
-                f"Error creando reminder para activity {activity_id}."
-            )
-            raise
-        finally:
-            if cursor: cursor.close()
-            if conn: conn.close()
+        if task_datetime <= now:
+            raise ValueError("La tarea debe ser posterior a la fecha y hora actual.")
+        if reminder_datetime <= now:
+            raise ValueError("El reminder debe ser posterior a la fecha y hora actual.")
+        if reminder_datetime >= task_datetime:
+            raise ValueError("El reminder debe ocurrir antes de la tarea.")
 
-    @staticmethod
-    def add_one_shot_reminder(
-        user_id: int,
-        title: str,
-        trigger_date: date,
-        trigger_time: time
-    ) -> int:
-        
         conn = None
         cursor = None
-
-        logger.info("Entró a ReminderService.add_one_shot_reminder")
-
         try:
             conn = get_connection()
             conn.start_transaction()
             cursor = conn.cursor()
-
-            logger.info(
-                f"INSERT -> {user_id}, {title}, {trigger_date}, {trigger_time}"
-            )
-
             cursor.execute(
                 """
                 INSERT INTO reminders
-                (
-                    user_id,
-                    title,
-                    reminder_type,
-                    trigger_date,
-                    trigger_time
-                )
-                VALUES
-                (
-                    %s,
-                    %s,
-                    'ONE_SHOT',
-                    %s,
-                    %s
-                )
+                (user_id, activity_id, reminder_type, trigger_time, remind_before_minutes)
+                VALUES (%s, %s, 'TASK', '00:00:00', %s)
                 """,
-                (
-                    user_id,
-                    title,
-                    trigger_date,
-                    trigger_time
-                )
+                (user_id, activity_id, remind_before_minutes)
             )
-            logger.info("INSERT ejecutado")
             reminder_id = cursor.lastrowid
             conn.commit()
-            logger.info(
-                f"Reminder ONE_SHOT {reminder_id} creado para usuario {user_id}."
-            )
+            logger.info(f"Reminder TASK {reminder_id} creado para task {activity_id}.")
             return reminder_id
         except Exception:
-            if conn: conn.rollback()
-            logger.exception(
-                f"Error creando reminder ONE_SHOT para usuario {user_id}."
-            )
+            if conn:
+                conn.rollback()
+            logger.exception(f"Error creando reminder para task {activity_id}.")
             raise
         finally:
-            if cursor: cursor.close()
-            if conn: conn.close()
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+    @staticmethod
+    def add_one_shot_reminder(
+        user_id: int, title: str, trigger_date: date, trigger_time: time
+    ) -> int:
+        reminder_datetime = ReminderService._combine_local_datetime(
+            trigger_date, trigger_time
+        )
+        now = datetime.now(ZoneInfo(os.environ["TIMEZONE"]))
 
-    
+        if reminder_datetime <= now:
+            raise ValueError(
+                "El reminder ONE_SHOT debe ser posterior a la fecha y hora actual."
+            )
+
+        conn = None
+        cursor = None
+        try:
+            conn = get_connection()
+            conn.start_transaction()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO reminders
+                (user_id, title, reminder_type, trigger_date, trigger_time)
+                VALUES (%s, %s, 'ONE_SHOT', %s, %s)
+                """,
+                (user_id, title, trigger_date, trigger_time)
+            )
+            reminder_id = cursor.lastrowid
+            conn.commit()
+            logger.info(f"Reminder ONE_SHOT {reminder_id} creado para usuario {user_id}.")
+            return reminder_id
+        except Exception:
+            if conn:
+                conn.rollback()
+            logger.exception(f"Error creando reminder ONE_SHOT para usuario {user_id}.")
+            raise
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
     @staticmethod
     def add_recurring_reminder(
         user_id: int,
@@ -555,12 +563,9 @@ class ReminderService:
             if conn: conn.close()
 
     @staticmethod
-    def disable_reminder(
-        reminder_id: int
-    ):
+    def disable_reminder(reminder_id: int):
         conn = None
         cursor = None
-
         try:
             conn = get_connection()
             conn.start_transaction()
@@ -569,7 +574,9 @@ class ReminderService:
             cursor.execute(
                 """
                 UPDATE reminders
-                SET enabled = FALSE
+                SET
+                    enabled = FALSE,
+                    last_sent_at = NOW()
                 WHERE id = %s
                 """,
                 (reminder_id,)
@@ -577,104 +584,119 @@ class ReminderService:
 
             conn.commit()
 
-            logger.info(
-                f"Reminder {reminder_id} deshabilitado."
-            )
-
         except Exception:
-            if conn:
-                conn.rollback()
-
+            if conn: conn.rollback()
             logger.exception(
                 f"Error deshabilitando reminder {reminder_id}."
             )
             raise
 
         finally:
+            if cursor: cursor.close()
+            if conn: conn.close()
+
+    @staticmethod
+    def update_reminder(
+        reminder_id: int, title: str = None, trigger_date: date = None,
+        trigger_time: time = None, frequency: str = None,
+        day_of_month: int = None, month_of_year: int = None, enabled: bool = None
+    ):
+        # Primero determinar qué tipo de reminder es.
+        conn = None
+        cursor = None
+        try:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT * FROM reminders WHERE id=%s",
+                (reminder_id,)
+            )
+            current = cursor.fetchone()
+        finally:
             if cursor:
                 cursor.close()
             if conn:
                 conn.close()
 
-    @staticmethod
-    def update_reminder(
-        reminder_id: int,
-        title: str = None,
-        trigger_date: date = None,
-        trigger_time: time = None,
-        frequency: str = None,
-        day_of_month: int = None,
-        month_of_year: int = None,
-        enabled: bool = None
-    ):
+        if current is None:
+            return {"updated": False, "error": "NOT_FOUND"}
+
+        reminder_type = current["reminder_type"]
+
+        # TASK: su momento de ejecución depende de la tarea.
+        # No se valida trigger_date/trigger_time porque no son su scheduling real.
+        if reminder_type == "TASK":
+            task = TasksService.find_task(current["activity_id"])
+            if task is None:
+                return {"updated": False, "error": "TASK_NOT_FOUND"}
+
+            now = datetime.now(ZoneInfo(os.environ["TIMEZONE"]))
+            task_datetime = ReminderService._combine_local_datetime(
+                task["due_date"], task["due_time"]
+            )
+            if task_datetime <= now:
+                return {"updated": False, "error": "PAST_TASK_DATETIME"}
+
+        elif reminder_type == "ONE_SHOT":
+            final_date = trigger_date if trigger_date is not None else current["trigger_date"]
+            final_time = trigger_time if trigger_time is not None else current["trigger_time"]
+            reminder_datetime = ReminderService._combine_local_datetime(
+                final_date, final_time
+            )
+            now = datetime.now(ZoneInfo(os.environ["TIMEZONE"]))
+            if reminder_datetime <= now:
+                return {"updated": False, "error": "PAST_DATETIME"}
+
+        elif reminder_type == "RECURRING":
+            # Los recurrentes no dependen de una fecha futura concreta.
+            pass
+        else:
+            raise ValueError(f"Tipo de reminder no soportado: {reminder_type}")
+
+        fields, values = [], []
+        if title is not None:
+            fields.append("title = %s"); values.append(title)
+        if trigger_date is not None:
+            fields.append("trigger_date = %s"); values.append(trigger_date)
+        if trigger_time is not None:
+            fields.append("trigger_time = %s"); values.append(trigger_time)
+        if frequency is not None:
+            fields.append("frequency = %s"); values.append(frequency)
+        if day_of_month is not None:
+            fields.append("day_of_month = %s"); values.append(day_of_month)
+        if month_of_year is not None:
+            fields.append("month_of_year = %s"); values.append(month_of_year)
+        if enabled is not None:
+            fields.append("enabled = %s"); values.append(enabled)
+
+        if not fields:
+            return {"updated": False, "error": "NO_CHANGES"}
+
         conn = None
         cursor = None
         try:
             conn = get_connection()
             conn.start_transaction()
             cursor = conn.cursor()
-
-            fields = []
-            values = []
-
-            if title is not None:
-                fields.append("title = %s")
-                values.append(title)
-
-            if trigger_date is not None:
-                fields.append("trigger_date = %s")
-                values.append(trigger_date)
-
-            if trigger_time is not None:
-                fields.append("trigger_time = %s")
-                values.append(trigger_time)
-
-            if frequency is not None:
-                fields.append("frequency = %s")
-                values.append(frequency)
-
-            if day_of_month is not None:
-                fields.append("day_of_month = %s")
-                values.append(day_of_month)
-
-            if month_of_year is not None:
-                fields.append("month_of_year = %s")
-                values.append(month_of_year)
-
-            if enabled is not None:
-                fields.append("enabled = %s")
-                values.append(enabled)
-
-            if not fields:
-                return
             values.append(reminder_id)
-
             cursor.execute(
-                f"""
-                UPDATE reminders
-                SET {", ".join(fields)}
-                WHERE id = %s
-                """,
-                values
+                f"UPDATE reminders SET {', '.join(fields)} WHERE id=%s",
+                tuple(values)
             )
-
+            updated = cursor.rowcount > 0
             conn.commit()
-
-            logger.info(
-                f"Reminder {reminder_id} actualizado."
-            )
-
+            logger.info(f"Reminder {reminder_id} actualizado.")
+            return {"updated": updated, "reminder_id": reminder_id}
         except Exception:
-            if conn: conn.rollback()
-
-            logger.exception(
-                f"Error actualizando reminder {reminder_id}."
-            )
+            if conn:
+                conn.rollback()
+            logger.exception(f"Error actualizando reminder {reminder_id}.")
             raise
         finally:
-            if cursor: cursor.close()
-            if conn: conn.close()
-
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
     @staticmethod
     def delete_reminder(
         reminder_id: int
@@ -710,6 +732,7 @@ class ReminderService:
         finally:
             if cursor: cursor.close()
             if conn: conn.close()
+
     
     @staticmethod
     async def process_reminders():

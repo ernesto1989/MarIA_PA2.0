@@ -20,10 +20,45 @@ Se incluye:
 
 '''
 from database.connection import get_connection
-from reminder_service import ReminderService
 from utils.logger import logger
+from datetime import datetime, timedelta, date, time
+from zoneinfo import ZoneInfo
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class TasksService:
+
+    @staticmethod
+    def _parse_date(value):
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        return datetime.strptime(str(value), "%Y-%m-%d").date()
+
+    @staticmethod
+    def _parse_time(value):
+        if isinstance(value, datetime):
+            return value.time()
+        if isinstance(value, time):
+            return value
+        value = str(value)
+        for fmt in ("%H:%M:%S", "%H:%M"):
+            try:
+                return datetime.strptime(value, fmt).time()
+            except ValueError:
+                continue
+        raise ValueError(f"Formato de hora inválido: {value}")
+
+    @staticmethod
+    def _combine_local_datetime(date_value, time_value):
+        dt = datetime.combine(
+            TasksService._parse_date(date_value),
+            TasksService._parse_time(time_value)
+        )
+        return dt.replace(tzinfo=ZoneInfo(os.environ["TIMEZONE"]))
 
     #Busca una actividad por id
     @staticmethod
@@ -170,7 +205,7 @@ class TasksService:
 
             cursor.execute("""
                 SELECT *
-                FROM activtasksities
+                FROM tasks
                 WHERE user_id = %s
                 AND status = 'IN_PROGRESS'
                 AND due_date BETWEEN CURDATE()
@@ -372,97 +407,96 @@ class TasksService:
     # Agrega actividades del usuario
     @staticmethod
     def add_task(
-        user_id,
-        title,
-        due_date,
-        due_time,
-        end_date,
-        end_time,
-        priority
+        user_id, title, due_date, due_time, end_date, end_time,
+        priority, reminder_requested=None
     ):
         conn = None
         cursor = None
-
         try:
-            # Validar conflictos antes de crear
+            #start date and time together 
+            task_datetime_init = TasksService._combine_local_datetime(
+                due_date, due_time
+            )
+
+            now = datetime.now(ZoneInfo(os.environ["TIMEZONE"]))
+
+            if task_datetime_init <= now:
+                return {"created": False, "error": "PAST_DATETIME"}
+
+
+            task_datetime_final = None
+            if end_date.strip() and end_time.strip():
+                #end date and time together 
+                task_datetime_final = TasksService._combine_local_datetime(
+                    end_date, end_time
+                )
+
+                if task_datetime_final <= now:
+                    return {"created": False, "error": "PAST_END_DATETIME"}
+
+                if task_datetime_final <= task_datetime_init:
+                    return {"created": False, "error": "END_BEFORE_START"}
+            else:
+                end_date = None
+                end_time = None
+
+            #search for conflicts
             conflicts = TasksService.find_task_conflicts(
-                user_id=user_id,
-                due_date=due_date,
-                due_time=due_time,
-                end_date=end_date,
-                end_time=end_time
+                user_id=user_id, due_date=due_date, due_time=due_time,
+                end_date=end_date, end_time=end_time
             )
 
             if conflicts:
                 logger.info(
-                    f"Conflicto detectado al crear tarea "
-                    f"user_id={user_id}, fecha={due_date}, hora={due_time}"
+                    f"Conflicto detectado al crear tarea user_id={user_id}, "
+                    f"fecha={due_date}, hora={due_time}"
                 )
-
-                return {
-                    "created": False,
-                    "conflicts": conflicts
-                }
+                return {"created": False, "error": "CONFLICT", "conflicts": conflicts}
 
             conn = get_connection()
             conn.start_transaction()
-
             cursor = conn.cursor(dictionary=True)
 
             cursor.execute("""
                 INSERT INTO tasks
-                (
-                    user_id,
-                    title,
-                    due_date,
-                    due_time,
-                    end_date,
-                    end_time,
-                    priority
-                )
-                VALUES
-                (
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s
-                )
-            """, (
-                user_id,
-                title,
-                due_date,
-                due_time,
-                end_date,
-                end_time,
-                priority
-            ))
+                (user_id, title, due_date, due_time, end_date, end_time, priority)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (user_id, title, due_date, due_time, end_date, end_time, priority))
 
             task_id = cursor.lastrowid
 
+            # Si el usuario no pidió un reminder explícito, crear el default de 10 min.
+            if not reminder_requested:
+                default_reminder_datetime = task_datetime_init - timedelta(minutes=10)
+
+                if default_reminder_datetime > now:
+                    cursor.execute("""
+                        INSERT INTO reminders
+                        (user_id, activity_id, reminder_type, trigger_time, remind_before_minutes)
+                        VALUES (%s, %s, 'TASK', '00:00:00', %s)
+                    """, (user_id, task_id, 10))
+
+                    logger.info(
+                        f"Reminder default {cursor.lastrowid} creado para task_id={task_id}"
+                    )
+                else:
+                    logger.info(
+                        f"No se creó reminder default para task_id={task_id}: "
+                        "el momento del reminder ya pasó."
+                    )
+
             conn.commit()
+            logger.info(f"Alta de tarea para user_id={user_id}")
+            return {"created": True, "task_id": task_id}
 
-            logger.info(
-                f"Alta de tarea para user_id={user_id}"
-            )
-
-            return {
-                "created": True,
-                "task_id": task_id
-            }
-
-        except Exception:
+        except Exception as e:
+            print(e)
             if conn:
                 conn.rollback()
-
             logger.exception(
-                f"Error agregando tarea "
-                f"user_id={user_id} title={title}"
+                f"Error agregando tarea user_id={user_id} title={title}"
             )
             raise
-
         finally:
             if cursor:
                 cursor.close()
@@ -470,167 +504,136 @@ class TasksService:
                 conn.close()
 
 
-    # Actualiza una actividad
     @staticmethod
     def update_task(
-        task_id,
-        title=None,
-        due_date=None,
-        due_time=None,
-        end_date=None,
-        end_time=None,
-        priority=None,
-        status=None
+        task_id, title=None, due_date=None, due_time=None,
+        end_date=None, end_time=None, priority=None, status=None
     ):
         conn = None
         cursor = None
+        deleted = 0
 
         try:
-            # Obtener actividad actual
             current_task = TasksService.find_task(task_id)
 
             if current_task is None:
-                return {
-                    "updated": False,
-                    "error": "NOT_FOUND"
-                }
+                return {"updated": False, "error": "NOT_FOUND"}
 
-            # Determinar fecha y hora finales
-            final_due_date = (
-                due_date
-                if due_date is not None
-                else current_task["due_date"]
-            )
+            # si se actualiza la fecha, pongo el que mandó el user, si no, la que estaba en la BD
+            final_due_date = due_date if due_date is not None else current_task["due_date"]
+            final_due_time = due_time if due_time is not None else current_task["due_time"]
+            final_end_date = end_date if end_date is not None else current_task["end_date"]
+            final_end_time = end_time if end_time is not None else current_task["end_time"]
 
-            final_due_time = (
-                due_time
-                if due_time is not None
-                else current_task["due_time"]
-            )
-
-            # Validar conflictos solamente si cambia
-            # la fecha o la hora
-            if due_date is not None or due_time is not None:
-
-                conflicts = TasksService.find_task_conflicts(
-                    user_id=current_task["user_id"],
-                    due_date=final_due_date,
-                    due_time=final_due_time,
-                    end_date=end_date,
-                    end_time=end_time,
-                    exclude_task_id=task_id
+            # Validar fechas únicamente cuando la tarea seguirá siendo activa.
+            # Una cancelación no debe fallar por tener una fecha antigua.
+            if status != "CANCELLED":
+                now = datetime.now(ZoneInfo(os.environ["TIMEZONE"]))
+                #pongo en un solo lugar el day y time de inicio
+                final_start = TasksService._combine_local_datetime(
+                    final_due_date, final_due_time
                 )
 
-                if conflicts:
-                    logger.info(
-                        f"Conflicto detectado al actualizar "
-                        f"tarea {task_id}"
+                if final_start <= now:
+                    return {"updated": False, "error": "PAST_DATETIME"}
+
+                #si el final date y time no son ni None ni '', eso es, me mandaron algo (o habia algo)
+                if final_end_date.strip() and final_end_time.strip():
+                    #pongo en un solo lugar el day y time de final
+                    final_end = TasksService._combine_local_datetime(
+                        final_end_date, final_end_time
                     )
 
-                    return {
-                        "updated": False,
-                        "conflicts": conflicts
-                    }
+                    #si el final ya pasó, lo rechazo
+                    if final_end <= now:
+                        return {"updated": False, "error": "PAST_END_DATETIME"}
+
+                    #si el final es antes del inicio, lo rechazo
+                    if final_end <= final_start:
+                        return {"updated": False, "error": "END_BEFORE_START"}
+
+                if (
+                    due_date is not None or due_time is not None
+                    or end_date is not None or end_time is not None
+                ):
+                    
+                    if end_date == ''or end_time == '':
+                        end_date = None
+                        end_time = None
+
+                    #busco conflictos
+                    conflicts = TasksService.find_task_conflicts(
+                        user_id=current_task["user_id"],
+                        due_date=final_due_date,
+                        due_time=final_due_time,
+                        end_date=final_end_date,
+                        end_time=final_end_time,
+                        exclude_task_id=task_id
+                    )
+
+                    if conflicts:
+                        return {
+                            "updated": False,
+                            "error": "CONFLICT",
+                            "conflicts": conflicts
+                        }
+
+            updates, values = [], []
+
+            if title is not None:
+                updates.append("title=%s"); values.append(title)
+            if due_date is not None:
+                updates.append("due_date=%s"); values.append(due_date)
+            if due_time is not None:
+                updates.append("due_time=%s"); values.append(due_time)
+            if end_date is not None:
+                updates.append("end_date=%s"); values.append(end_date)
+            if end_time is not None:
+                updates.append("end_time=%s"); values.append(end_time)
+            if priority is not None:
+                updates.append("priority=%s"); values.append(priority)
+            if status is not None:
+                updates.append("status=%s"); values.append(status)
+
+            if not updates:
+                return {"updated": False, "error": "NO_CHANGES"}
 
             conn = get_connection()
             conn.start_transaction()
-
             cursor = conn.cursor(dictionary=True)
-
-            updates = []
-            values = []
-
-            if title is not None:
-                updates.append("title=%s")
-                values.append(title)
-
-            if due_date is not None:
-                updates.append("due_date=%s")
-                values.append(due_date)
-
-            if due_time is not None:
-                updates.append("due_time=%s")
-                values.append(due_time)
-
-            if end_date is not None:
-                updates.append("end_date=%s")
-                values.append(end_date)
-
-            if end_time is not None:
-                updates.append("end_time=%s")
-                values.append(end_time)
-
-            if priority is not None:
-                updates.append("priority=%s")
-                values.append(priority)
-
-            if status is not None:
-                updates.append("status=%s")
-                values.append(status)
-
-            # No se proporcionaron cambios
-            if len(updates) == 0:
-                return {
-                    "updated": False,
-                    "error": "NO_CHANGES"
-                }
-
             values.append(task_id)
 
-            sql = f"""
-                UPDATE tasks
-                SET {', '.join(updates)}
-                WHERE id=%s
-            """
-
-            cursor.execute(sql, tuple(values))
-
+            cursor.execute(
+                f"UPDATE tasks SET {', '.join(updates)} WHERE id=%s",
+                tuple(values)
+            )
             updated = cursor.rowcount > 0
 
-            if status == 'CANCELLED':
+            if status == "CANCELLED":
                 cursor.execute(
-                    """
-                    DELETE FROM reminders
-                    WHERE activity_id = %s
-                    """,
+                    "DELETE FROM reminders WHERE activity_id=%s",
                     (task_id,)
                 )
                 deleted = cursor.rowcount
-
                 logger.info(
                     f"Reminders eliminados para task_id={task_id}: {deleted}"
                 )
-    
+
             conn.commit()
+            logger.info(f"Actualización de tarea {task_id}")
+            return {"updated": updated, "deleted": deleted, "task_id": task_id}
 
-            logger.info(
-                f"Actualización de tarea {task_id}"
-            )
-
-            return {
-                "updated": updated,
-                "deleted": deleted,
-                "task_id": task_id
-            }
-
-        except Exception:
+        except Exception as e:
+            print(e)
             if conn:
                 conn.rollback()
-
-            logger.exception(
-                f"Error actualizando tarea id={task_id}"
-            )
+            logger.exception(f"Error actualizando tarea id={task_id}")
             raise
-
         finally:
             if cursor:
                 cursor.close()
-
             if conn:
                 conn.close()
-
-
-    #Elimina todas las actividades completadas
     @staticmethod
     def cleanup_completed_tasks():
         conn = None

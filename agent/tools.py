@@ -59,7 +59,8 @@ def build_add_task_tool(user_id):
         due_time: str,
         end_date: str,
         end_time: str,
-        priority: str
+        priority: str,
+        reminder_requested: bool = None
     ):
         """
         Crea una nueva tarea.
@@ -79,7 +80,8 @@ def build_add_task_tool(user_id):
             due_time,
             end_date,
             end_time,
-            priority
+            priority,
+            reminder_requested
         )
 
         if not result["created"]:
